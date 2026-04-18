@@ -1,39 +1,29 @@
-"""MCP (Model Context Protocol) server manager with real client integration.
+from __future__ import annotations
+import logging
+import asyncio
+import os
+import yaml
+import re
+import anyio
+from pathlib import Path
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
 
-This module provides management of MCP server connections and tool exposure
+"""This module provides management of MCP server connections and tool exposure
 for agents. It uses the official MCP Python SDK for real server communication
 via stdio transport.
 
 Reference: https://modelcontextprotocol.io/
-
-Example:
-    manager = get_mcp_manager()
-    
-    # Discover tools from a server
-    tools = await manager.discover_tools("filesystem")
-    
-    # Call a tool
-    result = await manager.call_tool("filesystem", "read_file", {"path": "README.md"})
-    
-    # Close all connections when done
-    await manager.close_all()
 """
 
-from __future__ import annotations
-
-import asyncio
-import os
-import re
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
-import yaml
 
 from ..logger import setup_logger
 
 
 logger = setup_logger()
+# Silence noisy system loggers
+logging.getLogger("asyncio").setLevel(logging.CRITICAL)
+logging.getLogger("anyio").setLevel(logging.CRITICAL)
 
 
 # Constants
@@ -98,11 +88,15 @@ class MCPServerConnection:
     Attributes:
         name: Server name identifier.
         session: The MCP ClientSession for communication.
-        cleanup: Async cleanup function to call on disconnect.
+        client_context: Context manager for the transport (e.g. stdio).
+        session_context: Context manager for the session.
+        loop: The event loop this connection belongs to.
     """
     name: str
     session: Any  # mcp.ClientSession
-    cleanup: Any  # Coroutine to cleanup connection
+    client_context: Any  # Context manager for the transport
+    session_context: Any  # Context manager for the session
+    loop: Any = None  # The event loop this connection belongs to
 
 
 class MCPManager:
@@ -126,6 +120,11 @@ class MCPManager:
             config_path: Path to the MCP configuration file.
         """
         if config_path is None:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            
             config_dir = os.getenv('CONFIG_DIRECTORY', 'config')
             config_path = os.path.join(config_dir, "mcp.yaml")
             
@@ -135,6 +134,26 @@ class MCPManager:
         self._connections: Dict[str, MCPServerConnection] = {}
         self._connection_locks: Dict[str, asyncio.Lock] = {}
         self._global_lock = asyncio.Lock()
+        self._main_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._mcp_stderr_file = None
+
+    def _get_lock(self, server_name: str) -> asyncio.Lock:
+        """Get or create a lock for a specific server."""
+        if server_name not in self._connection_locks:
+            self._connection_locks[server_name] = asyncio.Lock()
+        return self._connection_locks[server_name]
+        
+        # Setup a loop exception handler to swallow noisy anyio/asyncio errors
+        try:
+            loop = asyncio.get_event_loop()
+            def silent_exception_handler(loop, context):
+                msg = context.get("message")
+                if "asynchronous generator" in msg or "cancel scope" in msg:
+                    return
+                loop.default_exception_handler(context)
+            loop.set_exception_handler(silent_exception_handler)
+        except Exception:
+            pass
 
     @property
     def config(self) -> Dict[str, Any]:
@@ -210,78 +229,89 @@ class MCPManager:
         async with self._global_lock:
             if server_name not in self._connection_locks:
                 self._connection_locks[server_name] = asyncio.Lock()
-
-        async with self._connection_locks[server_name]:
-            # Already connected?
+        """Connect to an MCP server with locking."""
+        async with self._get_lock(server_name):
+            # Check if already connected and active
             if server_name in self._connections:
-                logger.debug(f"Already connected to MCP server: {server_name}")
-                return True
+                conn = self._connections[server_name]
+                if conn.session:
+                    return True
+                else:
+                    # Clean up broken connection
+                    await self._close_server_connection(server_name)
 
             config = self.get_server_config(server_name)
             if not config:
+                logger.error(f"Configuration not found for MCP server: {server_name}")
                 return False
 
             try:
-                # Import MCP SDK
                 from mcp import ClientSession, StdioServerParameters
                 from mcp.client.stdio import stdio_client
 
-                # Prepare environment
                 env = os.environ.copy()
                 for key, value in config.env.items():
                     env[key] = value
 
-                # Create server parameters
                 server_params = StdioServerParameters(
                     command=config.command,
                     args=config.args,
-                    env=env,
+                    env=env
                 )
 
-                logger.info(f"Connecting to MCP server: {server_name}")
-                logger.debug(f"  Command: {config.command} {' '.join(config.args)}")
+                logger.info(f"Connecting to MCP server: {server_name}...")
+                
+                # Redirect stderr to avoid console noise from MCP servers
+                if self._mcp_stderr_file is None:
+                    try:
+                        # Ensure logs directory exists
+                        os.makedirs("logs", exist_ok=True)
+                        self._mcp_stderr_file = open("logs/mcp_servers.log", "a", encoding="utf-8")
+                    except Exception:
+                        self._mcp_stderr_file = sys.stderr
 
-                # Create the connection context
-                # Note: We need to manage the context manually for long-lived connections
-                client_context = stdio_client(server_params)
+                # Use a context manager but handle it manually to keep streams alive
+                client_context = stdio_client(server_params, errlog=self._mcp_stderr_file)
                 read_stream, write_stream = await client_context.__aenter__()
-
+                
                 session_context = ClientSession(read_stream, write_stream)
                 session = await session_context.__aenter__()
-
-                # Initialize the session
-                await asyncio.wait_for(
-                    session.initialize(),
-                    timeout=CONNECTION_TIMEOUT
-                )
-
-                # Store cleanup function
-                async def cleanup():
-                    try:
-                        await session_context.__aexit__(None, None, None)
-                        await client_context.__aexit__(None, None, None)
-                    except Exception as e:
-                        logger.warning(f"Error during MCP cleanup: {e}")
+                await session.initialize()
 
                 self._connections[server_name] = MCPServerConnection(
                     name=server_name,
+                    client_context=client_context,
+                    session_context=session_context,
                     session=session,
-                    cleanup=cleanup,
+                    loop=asyncio.get_running_loop()
                 )
-
-                logger.info(f"Connected to MCP server: {server_name}")
+                logger.info(f"Successfully connected to {server_name}")
                 return True
-
-            except ImportError as e:
-                logger.error(f"MCP SDK not installed: {e}")
-                logger.error("Please install: pip install mcp")
-                return False
-            except asyncio.TimeoutError:
-                logger.error(f"Timeout connecting to MCP server: {server_name}")
-                return False
             except Exception as e:
-                logger.error(f"Failed to connect to MCP server {server_name}: {e}")
+                logger.error(f"Failed to connect to {server_name}: {str(e)}", exc_info=True)
                 return False
+
+    async def _close_server_connection(self, server_name: str) -> None:
+        """Internal helper to close a connection cleanly."""
+        conn = self._connections.pop(server_name, None)
+        if conn:
+            try:
+                # Attempt graceful closure of the session and client contexts.
+                # Catching anyio-specific task mismatch or closed resource errors 
+                # that occur when loops are switched or tasks are terminated abruptly.
+                if conn.session_context:
+                    try:
+                        await conn.session_context.__aexit__(None, None, None)
+                    except (anyio.ClosedResourceError, RuntimeError, Exception) as e:
+                        logger.debug(f"Non-fatal error closing session context for {server_name}: {e}")
+                
+                if conn.client_context:
+                    try:
+                        await conn.client_context.__aexit__(None, None, None)
+                    except (anyio.ClosedResourceError, RuntimeError, Exception) as e:
+                        logger.debug(f"Non-fatal error closing client context for {server_name}: {e}")
+            except Exception as e:
+                logger.debug(f"Error during cleanup of {server_name}: {e}")
 
     async def disconnect(self, server_name: str) -> None:
         """Disconnect from an MCP server.
@@ -289,21 +319,9 @@ class MCPManager:
         Args:
             server_name: Name of the server to disconnect from.
         """
-        if server_name not in self._connections:
-            return
-
-        async with self._connection_locks.get(
-            server_name, asyncio.Lock()
-        ):
-            if server_name not in self._connections:
-                return
-
-            conn = self._connections.pop(server_name)
-            try:
-                await conn.cleanup()
-                logger.info(f"Disconnected from MCP server: {server_name}")
-            except Exception as e:
-                logger.warning(f"Error disconnecting from {server_name}: {e}")
+        async with self._get_lock(server_name):
+            await self._close_server_connection(server_name)
+            logger.info(f"Disconnected from MCP server: {server_name}")
 
     async def close_all(self) -> None:
         """Disconnect from all MCP servers."""
@@ -315,23 +333,29 @@ class MCPManager:
     async def _get_or_create_connection(
         self, server_name: str
     ) -> Optional[MCPServerConnection]:
-        """Get existing connection or create a new one.
+        """Get existing connection or create a new one with loop-awareness."""
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
 
-        Args:
-            server_name: Name of the server.
+        if server_name in self._connections:
+            conn = self._connections[server_name]
+            # Verify if connection is valid for current loop
+            if conn.loop is current_loop and conn.session:
+                return conn
+            else:
+                logger.debug(f"Detected stale or loop-mismatched connection for {server_name}. Reconnecting...")
+                await self.disconnect(server_name)
 
-        Returns:
-            MCPServerConnection or None if connection failed.
-        """
-        if server_name not in self._connections:
-            success = await self.connect(server_name)
-            if not success:
-                return None
+        success = await self.connect(server_name)
+        if not success:
+            return None
 
         return self._connections.get(server_name)
 
     async def discover_tools(self, server_name: str) -> List[MCPTool]:
-        """Discover tools from an MCP server.
+        """Discover tools from an MCP server with robust retry.
 
         Args:
             server_name: Name of the MCP server.
@@ -339,26 +363,32 @@ class MCPManager:
         Returns:
             List of MCPTool objects discovered from the server.
         """
-        conn = await self._get_or_create_connection(server_name)
-        if not conn:
-            logger.error(f"Cannot discover tools: not connected to {server_name}")
-            return []
+        for attempt in range(2):
+            conn = await self._get_or_create_connection(server_name)
+            if not conn:
+                logger.error(f"Cannot discover tools: not connected to {server_name}")
+                return []
 
-        try:
-            tools_response = await conn.session.list_tools()
-            tools = []
-            for tool in tools_response.tools:
-                tools.append(MCPTool(
-                    name=tool.name,
-                    description=tool.description or "",
-                    input_schema=tool.inputSchema if hasattr(tool, 'inputSchema') else {},
-                    server_name=server_name,
-                ))
-            logger.info(f"Discovered {len(tools)} tools from {server_name}")
-            return tools
-        except Exception as e:
-            logger.error(f"Failed to discover tools from {server_name}: {e}")
-            return []
+            try:
+                tools_response = await conn.session.list_tools()
+                    
+                tools = []
+                for tool in tools_response.tools:
+                    tools.append(MCPTool(
+                        name=tool.name,
+                        description=tool.description or "",
+                        input_schema=tool.inputSchema if hasattr(tool, 'inputSchema') else {},
+                        server_name=server_name,
+                    ))
+                logger.info(f"Discovered {len(tools)} tools from {server_name}")
+                return tools
+            except Exception as e:
+                logger.warning(f"Failed to discover tools from {server_name} (attempt {attempt+1}/2): {e}")
+                # Force disconnect before retry
+                await self.disconnect(server_name)
+                if attempt == 1:
+                    logger.error(f"Max retries reached for tool discovery on {server_name}")
+                    return []
 
     async def list_resources(self, server_name: str) -> List[MCPResource]:
         """List available resources from an MCP server.
@@ -390,49 +420,49 @@ class MCPManager:
             logger.error(f"Failed to list resources from {server_name}: {e}")
             return []
 
-    async def call_tool(
-        self, 
-        server_name: str, 
-        tool_name: str, 
-        arguments: Dict[str, Any]
-    ) -> str:
-        """Call a tool on an MCP server.
+    async def call_tool(self, server_name: str, tool_name: str, arguments: Dict[str, Any] = None) -> Any:
+        """Call a tool on a server with robust retry and session validation."""
+        if arguments is None:
+            arguments = {}
 
-        Args:
-            server_name: Name of the MCP server.
-            tool_name: Name of the tool to call.
-            arguments: Arguments to pass to the tool.
+        for attempt in range(3):
+            try:
+                # Use the loop-aware connection getter to ensure we are using 
+                # a connection bound to the current event loop.
+                conn = await self._get_or_create_connection(server_name)
+                if not conn or not conn.session:
+                    raise Exception(f"Failed to establish or retrieve valid connection for {server_name}")
 
-        Returns:
-            Tool execution result as a string.
-        """
-        conn = await self._get_or_create_connection(server_name)
-        if not conn:
-            return f"Error: Not connected to MCP server {server_name}"
+                # Call the tool
+                from mcp import types as mcp_types
+                result = await conn.session.call_tool(tool_name, arguments)
 
-        try:
-            from mcp import types as mcp_types
+                # Extract content from result
+                contents = []
+                for content in result.content:
+                    if isinstance(content, mcp_types.TextContent):
+                        contents.append(content.text)
+                    elif hasattr(content, 'text'):
+                        contents.append(content.text)
+                    elif hasattr(content, 'data'):
+                        contents.append(f"[Binary data: {len(content.data)} bytes]")
+                    else:
+                        contents.append(str(content))
 
-            result = await conn.session.call_tool(tool_name, arguments=arguments)
-            
-            # Extract content from result
-            contents = []
-            for content in result.content:
-                if isinstance(content, mcp_types.TextContent):
-                    contents.append(content.text)
-                elif hasattr(content, 'text'):
-                    contents.append(content.text)
-                elif hasattr(content, 'data'):
-                    contents.append(f"[Binary data: {len(content.data)} bytes]")
+                return "\n".join(contents)
+
+            except Exception as e:
+                error_msg = str(e) or e.__class__.__name__
+                logger.warning(f"Tool call failed (attempt {attempt+1}/3) for {server_name}.{tool_name}: {error_msg}")
+                if attempt < 2:
+                    # Force disconnect and clear session before retry
+                    await self.disconnect(server_name)
+                    # Use a slightly longer backoff for filesystem to allow OS resource cleanup
+                    backoff = 1.0 if server_name != "filesystem" else 1.5
+                    await asyncio.sleep(backoff)
                 else:
-                    contents.append(str(content))
-
-            return "\n".join(contents)
-
-        except Exception as e:
-            error_msg = f"Error calling tool {tool_name}: {e}"
-            logger.error(error_msg)
-            return error_msg
+                    logger.error(f"Max retries reached for tool {tool_name} on {server_name}")
+                    raise e
 
     async def read_resource(self, server_name: str, uri: str) -> str:
         """Read a resource from an MCP server.
@@ -493,15 +523,29 @@ class MCPManager:
             return all_tools
 
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # We're in an async context, create a new task
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if self._main_loop and self._main_loop.is_running():
+                # Use the dedicated background loop
+                from concurrent.futures import Future
+                def _run():
+                    return asyncio.run_coroutine_threadsafe(_gather_tools(), self._main_loop).result(timeout=60)
+                
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    return executor.submit(_run).result()
+            
+            if loop and loop.is_running():
+                # We're in an async context, create a new task in a separate thread
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(asyncio.run, _gather_tools())
                     return future.result(timeout=60)
             else:
-                return loop.run_until_complete(_gather_tools())
+                return asyncio.run(_gather_tools())
         except Exception as e:
             logger.warning(f"Failed to get tools for {agent_name}: {e}")
             return []
@@ -571,9 +615,15 @@ def reset_mcp_manager() -> None:
     if _default_manager is not None:
         # Try to cleanup connections
         try:
-            loop = asyncio.get_event_loop()
-            if not loop.is_running():
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+                
+            if loop and not loop.is_running():
                 loop.run_until_complete(_default_manager.close_all())
+            elif not loop:
+                asyncio.run(_default_manager.close_all())
         except Exception:
             pass
     _default_manager = None

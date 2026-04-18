@@ -5,10 +5,10 @@ from langgraph.checkpoint.memory import MemorySaver
 from .core.workflow import WorkflowManager
 from .core.language_models import LanguageModelManager
 from .core.state import create_initial_state
+from .logger import setup_logger
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Use the centralized logger
+logger = setup_logger()
 
 class MultiAgentSystem:
     def __init__(self):

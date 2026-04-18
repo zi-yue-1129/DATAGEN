@@ -246,8 +246,7 @@ class BaseAgent(ABC):
             agent.max_iterations = max_iterations
             logger.info(f"Set max_iterations={max_iterations} for {self.agent_name}")
         else:
-             # If it's a Runnable/Graph, we might need another way, but for now log warning if not settable
-             logger.warning(f"Agent {self.agent_name} does not support max_iterations attribute")
+             pass
 
         logger.info(f"{self.agent_name} created successfully")
         return agent

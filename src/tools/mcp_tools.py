@@ -108,9 +108,26 @@ class MCPToolAdapter(BaseTool):
             Tool execution result as string.
         """
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Create a new event loop in a thread
+            from ..core.mcp_manager import get_mcp_manager
+            manager = get_mcp_manager()
+            
+            if manager._main_loop and manager._main_loop.is_running():
+                # Use the dedicated background loop
+                def _run_async():
+                    return asyncio.run_coroutine_threadsafe(self._arun(**kwargs), manager._main_loop).result(timeout=120)
+                
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    return executor.submit(_run_async).result()
+
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if loop and loop.is_running():
+                # If we're already in a running event loop, we must run the
+                # async tool call in a separate thread to avoid nested loops.
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(
@@ -119,7 +136,8 @@ class MCPToolAdapter(BaseTool):
                     )
                     return future.result(timeout=120)
             else:
-                return loop.run_until_complete(self._arun(**kwargs))
+                # No running event loop in this thread, safe to use asyncio.run
+                return asyncio.run(self._arun(**kwargs))
         except Exception as e:
             error_msg = f"Error executing MCP tool {self.name}: {e}"
             logger.error(error_msg)
@@ -248,8 +266,23 @@ def get_mcp_tools_sync(server_names: List[str]) -> List[MCPToolAdapter]:
         List of MCPToolAdapter instances.
     """
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
+        from ..core.mcp_manager import get_mcp_manager
+        manager = get_mcp_manager()
+        
+        if manager._main_loop and manager._main_loop.is_running():
+            def _get_async():
+                return asyncio.run_coroutine_threadsafe(get_mcp_tools_async(server_names), manager._main_loop).result(timeout=120)
+            
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                return executor.submit(_get_async).result()
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(
@@ -258,9 +291,7 @@ def get_mcp_tools_sync(server_names: List[str]) -> List[MCPToolAdapter]:
                 )
                 return future.result(timeout=120)
         else:
-            return loop.run_until_complete(
-                get_mcp_tools_async(server_names)
-            )
+            return asyncio.run(get_mcp_tools_async(server_names))
     except Exception as e:
         logger.error(f"Failed to get MCP tools: {e}")
         return []
