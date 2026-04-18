@@ -132,8 +132,8 @@ class MCPManager:
         self._config: Optional[Dict[str, Any]] = None
         self._servers: Dict[str, MCPServerConfig] = {}
         self._connections: Dict[str, MCPServerConnection] = {}
-        self._connection_locks: Dict[str, asyncio.Lock] = {}
-        self._global_lock = asyncio.Lock()
+        self._connection_locks: Dict[tuple[asyncio.AbstractEventLoop, str], asyncio.Lock] = {}
+        self._global_locks: Dict[asyncio.AbstractEventLoop, asyncio.Lock] = {}
         self._main_loop: Optional[asyncio.AbstractEventLoop] = None
         self._mcp_stderr_file = None
         
@@ -150,10 +150,19 @@ class MCPManager:
             pass
 
     def _get_lock(self, server_name: str) -> asyncio.Lock:
-        """Get or create a lock for a specific server."""
-        if server_name not in self._connection_locks:
-            self._connection_locks[server_name] = asyncio.Lock()
-        return self._connection_locks[server_name]
+        """Get or create a lock for a specific server bound to the current running loop."""
+        loop = asyncio.get_running_loop()
+        key = (loop, server_name)
+        if key not in self._connection_locks:
+            self._connection_locks[key] = asyncio.Lock()
+        return self._connection_locks[key]
+
+    async def _get_global_lock(self) -> asyncio.Lock:
+        """Get or create the global lock bound to the current running loop."""
+        loop = asyncio.get_running_loop()
+        if loop not in self._global_locks:
+            self._global_locks[loop] = asyncio.Lock()
+        return self._global_locks[loop]
 
     @property
     def config(self) -> Dict[str, Any]:
@@ -225,10 +234,12 @@ class MCPManager:
         Returns:
             True if connection successful, False otherwise.
         """
-        # Get or create lock for this server
-        async with self._global_lock:
-            if server_name not in self._connection_locks:
-                self._connection_locks[server_name] = asyncio.Lock()
+        # Get or create lock for this server bound to current loop
+        global_lock = await self._get_global_lock()
+        async with global_lock:
+            # Re-ensure lock exists for this loop
+            _ = self._get_lock(server_name)
+        
         """Connect to an MCP server with locking."""
         async with self._get_lock(server_name):
             # Check if already connected and active

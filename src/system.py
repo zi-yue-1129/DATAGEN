@@ -19,82 +19,73 @@ class MultiAgentSystem:
             lm_manager=self.lm_manager,
             working_directory=config.WORKING_DIRECTORY
         )
+        self.stop_requested = False
 
-    def run(self, user_input: str) -> None:
+    async def run(self, user_input: str) -> None:
         graph = self.workflow_manager.get_graph()
         initial_state = create_initial_state(user_input)
         
         config_params = {"configurable": {"thread_id": "1"}, "recursion_limit": 3000}
         
-        # Initialize the status spinner
         UI.show_spinner("正在初始化分析引擎...")
         
         try:
-            stream = graph.stream(
+            current_node = None
+            
+            # We use astream_events to capture both node transitions and chat model streaming
+            async for event in graph.astream_events(
                 initial_state,
                 config_params,
-                stream_mode="values",
-                debug=False
-            )
-            
-            while True:
-                try:
-                    # Ensure status is running before we wait for the next event
-                    UI.update_status("正在處理工作流...")
-                    
-                    event = next(stream, None)
-                    if event is None:
-                        break
-                        
-                    # Extract message
-                    message = event["messages"][-1]
-                    
-                    # Update status message based on current active agent
-                    last_agent = event.get("last_active_agent", "系統")
-                    UI.update_status(f"正在執行: [bold magenta]{last_agent}[/bold magenta] ...")
-                    
-                    # Display the agent's message in a beautiful panel
-                    if isinstance(message, AIMessage):
-                        # Prefer name from message, then from state, then fallback
-                        agent_display_name = getattr(message, "name", None) or last_agent or "Agent"
-                        UI.print_agent_message(agent_display_name, message.content)
-                    elif isinstance(message, HumanMessage):
-                        UI.print_system_info(f"使用者輸入: {message.content}")
-                    elif isinstance(message, tuple):
-                        UI.print_system_info(str(message))
-                        
-                except KeyboardInterrupt:
-                    # INTERVENTION: UI.stop_status() is called inside get_intervention_menu()
-                    choice = get_intervention_menu()
-                    
-                    if choice == "繼續執行 (Continue)":
-                        UI.print_system_info("恢復執行...")
-                        continue
-                    elif choice == "提供額外指令 (Add Instructions)":
-                        new_instr = UI.ask_text("請輸入您的指令：")
-                        if new_instr:
-                            graph.update_state(config_params, {"messages": [HumanMessage(content=new_instr)]})
-                            UI.print_system_info(f"已插入新指令: {new_instr}")
-                        continue
-                    elif choice == "查看當前狀態 (View State)":
-                        UI.print_system_info("當前狀態摘要已顯示在日誌中 (或在此顯示面板)")
-                        continue
-                    elif choice == "結束研究 (Exit)":
-                        UI.print_system_info("使用者選擇結束任務。")
-                        raise
-                    else:
-                        continue
-                except StopIteration:
+                version="v2"
+            ):
+                if self.stop_requested:
                     break
-                except Exception as e:
-                    UI.print_error(f"工作流執行錯誤: {e}")
-                    logger.exception("Workflow execution error")
-                    break
+                
+                kind = event["event"]
+                
+                # Handle Status Updates (Node transitions)
+                if kind == "on_chain_start" and event["name"] == "LangGraph":
+                    UI.update_status("工作流已啟動", agent="系統")
+                
+                elif kind == "on_node_start":
+                    node_name = event["name"]
+                    current_node = node_name
+                    UI.update_status(f"正在執行: [bold]{node_name}[/bold] ...", agent=node_name)
+                
+                # Handle Chat Model Streaming
+                elif kind == "on_chat_model_stream":
+                    content = event["data"]["chunk"].content
+                    if content:
+                        # Update UI with incremental chunk
+                        UI.print_agent_message(current_node, content, is_stream=True)
+
+                # Handle Final Messages from nodes
+                elif kind == "on_node_end":
+                    node_output = event["data"].get("output")
+                    if node_output and "messages" in node_output:
+                        last_msg = node_output["messages"][-1]
+                        if isinstance(last_msg, AIMessage):
+                            agent_name = event["name"]
+                            # End stream if we were streaming for this node
+                            UI.end_stream()
+                            # Optional: Print final collected content if needed for history
+                            # UI.print_agent_message(agent_name, last_msg.content)
+                        elif isinstance(last_msg, HumanMessage):
+                            UI.print_system_info(f"使用者輸入: {last_msg.content}")
+
+            UI.update_status("任務完成", agent="系統")
+
+        except Exception as e:
+            UI.print_error(f"工作流執行錯誤: {e}")
+            logger.exception("Workflow execution error")
         finally:
-            UI.stop_status()
+            UI.update_status("就緒", agent="系統")
 
 if __name__ == "__main__":
+    import asyncio
     system = MultiAgentSystem()
-    user_input = UI.ask_text("Please enter your research topic: ")
-    if user_input:
-        system.run(user_input)
+    async def test():
+        user_input = UI.ask_text("Please enter your research topic: ")
+        if user_input:
+            await system.run(user_input)
+    asyncio.run(test())

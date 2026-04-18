@@ -72,52 +72,63 @@ def run_mcp_loop(loop):
     except Exception as e:
         logger.error(f"MCP background loop error: {e}")
 
-def main():
-    """Main entry point"""
-    UI.print_header("Multi-Agent DataAnalysis System v2.0")
+async def main():
+    """Main async entry point"""
+    UI.initialize()
+    UI.print_header("Multi-Agent DataAnalysis System v3.0")
     
-    # Create and start a background event loop for persistent MCP connections
-    mcp_loop = asyncio.new_event_loop()
-    mcp_thread = threading.Thread(target=run_mcp_loop, args=(mcp_loop,), daemon=True)
-    mcp_thread.start()
+    # Initialize Multi-Agent System
+    UI.update_status("正在初始化代理人系統...", agent="系統")
+    system = MultiAgentSystem()
     
-    # Register the loop with the MCP manager
-    manager = get_mcp_manager()
-    manager._main_loop = mcp_loop
-    
-    shutdown_manager = ShutdownManager(mcp_loop, mcp_thread)
+    UI.print_system_info("系統已準備就緒。輸入您的研究課題開始分析，或輸入 /help 查看命令。")
 
-    # Signal handling for SIGTERM
-    def handle_signal(signum, frame):
-        shutdown_manager.shutdown()
-
-    signal.signal(signal.SIGTERM, handle_signal)
-    # Note: SIGINT (Ctrl+C) is handled via try/except in the main loop to support intervention
-
-    try:
-        system = MultiAgentSystem()
+    while True:
+        # Get input from the persistent resident input box
+        user_input = await UI.get_input_async()
         
-        # Interactive Topic Entry
-        user_input = UI.ask_text("請輸入您的研究課題或分析需求：", 
-                                default="datapath:OnlineSalesData.csv\nUse machine learning to perform data analysis and write reports")
-        
-        if not user_input or user_input.lower() in ['exit', 'quit', '退出']:
-            shutdown_manager.shutdown()
+        if not user_input:
+            continue
             
-        system.run(user_input)
+        if user_input.startswith("/"):
+            # Handle Slash Commands
+            cmd = user_input.lower()
+            if cmd in ["/exit", "/quit", "/退出"]:
+                UI.print_system_info("正在關閉系統...")
+                break
+            elif cmd == "/help":
+                UI.print_system_info("可用命令: /exit, /help, /undo, /state")
+                continue
+            elif cmd == "/undo":
+                UI.print_system_info("回退功能尚未實作。")
+                continue
+            elif cmd in ["/state", "/status"]:
+                import platform
+                from src.core.mcp_manager import get_mcp_manager
+                manager = get_mcp_manager()
+                servers = list(manager._connections.keys())
+                status = f"\n  Python: {platform.python_version()}\n  OS: {platform.system()}\n  MCP 連線: {', '.join(servers) if servers else '無'}\n  工作目錄: {os.getcwd()}"
+                UI.print_system_info(f"系統當前狀態: {status}")
+                continue
+            else:
+                UI.print_error(f"未知命令: {cmd}")
+                continue
         
-        UI.print_system_info("研究任務已完成。")
-        if UI.ask_choice("是否退出系統？", ["是", "否"]) == "是":
-            shutdown_manager.shutdown()
-            
-    except KeyboardInterrupt:
-        # This catch is mainly for cases outside the system.run intervention loop
-        shutdown_manager.shutdown()
-    except Exception as e:
-        UI.print_error(f"系統運行時發生錯誤: {e}")
-        logger.exception("Critical error in main loop")
-    finally:
-        shutdown_manager.shutdown()
+        # Plain text - start or feed to the agent system
+        UI.print_system_info(f"啟動任務: {user_input}")
+        
+        # Run the system in the background or await it
+        # For simplicity, we await it here, but UI remains responsive during input pauses
+        # To truly have dual-mode, we'd wrap system.run in a task
+        try:
+            await system.run(user_input)
+        except Exception as e:
+            UI.print_error(f"執行時發生錯誤: {e}")
+
+    UI.print_header("系統已安全關閉。感謝使用！")
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
