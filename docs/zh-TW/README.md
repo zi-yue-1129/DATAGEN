@@ -89,6 +89,11 @@ pip install -r requirements.txt
 # 同時供 filesystem MCP 伺服器使用
 WORKING_DIRECTORY = ./data/
 
+# 配置目錄路徑（可選）
+# 所有設定檔（agent_models.yaml、agents/、mcp.yaml）皆相對於此目錄。
+# 預設為 config/
+CONFIG_DIRECTORY = config
+
 # Conda 環境名稱（必需）
 CONDA_ENV = datagen
 
@@ -161,9 +166,9 @@ python main.py
 
 ### Agent 模型配置
 
-用戶可以通過編輯 `config/agent_models.yaml` 文件來自定義每個代理的語言模型提供者和模型配置。這允許根據不同代理需求優化模型選擇和參數。
+用戶可以通過編輯 `agent_models.yaml` 文件（位於您的 `CONFIG_DIRECTORY` 中）來自定義每個代理的語言模型提供者和模型配置。這允許您只需指向不同的配置資料夾，即可輕鬆切換環境（如開發/生產環境）。
 
-以下是 `config/agent_models.yaml` 的範例結構：
+以下是 `agent_models.yaml` 的範例結構：
 
 ```yaml
 agents:
@@ -205,7 +210,8 @@ DATAGEN 實現了強大的**漸進式揭露**架構用於代理配置，靈感�
 | [MCP 配置](MCP_CONFIG.md) | Model Context Protocol 服務設置 |
 
 ### 主要功能
-- **基於技能的架構**：可重用技能存儲在 `config/skills/`
+- **統一配置根目錄**：所有核心設定皆透過 `CONFIG_DIRECTORY` 環境變數進行管理。
+- **基於技能的架構**：可重用技能存儲在 `skills/`（位於配置根目錄內）
 - **動態工具載入**：通過 `config.yaml` 使用 `ToolFactory` 配置工具
 - **Model Context Protocol (MCP)**：外部服務器整合（檔案系統、GitHub、網頁搜索）
 - **漸進式揭露**：三級載入策略優化 Context Window

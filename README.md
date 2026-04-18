@@ -85,6 +85,11 @@ pip install -r requirements.txt
 # Also used by filesystem MCP server
 WORKING_DIRECTORY = ./data/
 
+# Configuration directory path (optional)
+# All config files (agent_models.yaml, agents/, mcp.yaml) are relative to this directory.
+# Default is config/
+CONFIG_DIRECTORY = config
+
 # Conda environment name (required)
 CONDA_ENV = datagen
 
@@ -157,9 +162,9 @@ The system uses LangGraph to create a state graph that manages the entire resear
 
 ### Agent Model Configuration
 
-Users can customize each agent's language model provider and model configuration by editing the `config/agent_models.yaml` file. This allows for optimization of model selection and parameters based on different agent requirements.
+Users can customize each agent's language model provider and model configuration by editing the `agent_models.yaml` file (located in your `CONFIG_DIRECTORY`). This allows for seamless environment switching (dev/prod) by simply pointing to a different configuration folder.
 
-Here's an example structure of `config/agent_models.yaml`:
+Here's an example structure of `agent_models.yaml`:
 
 ```yaml
 agents:
@@ -201,7 +206,8 @@ DATAGEN implements a powerful **Progressive Disclosure** architecture for agent 
 | [MCP Configuration](docs/MCP_CONFIG.md) | Model Context Protocol server setup |
 
 ### Key Features
-- **Skill-Based Architecture**: Reusable skills stored in `config/skills/`
+- **Unified Config Root**: All core settings are managed via the `CONFIG_DIRECTORY` environment variable.
+- **Skill-Based Architecture**: Reusable skills stored in `skills/` (within the config root)
 - **Dynamic Tool Loading**: Tools configured via `config.yaml` using `ToolFactory`
 - **Model Context Protocol (MCP)**: External server integration (Filesystem, GitHub, Web Search)
 - **Progressive Disclosure**: Three-level loading strategy for Context Window optimization
