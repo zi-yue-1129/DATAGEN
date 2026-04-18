@@ -1,5 +1,6 @@
+from __future__ import annotations
 from .state import State
-from typing import Literal, Union, Dict, List, Optional, cast, Any
+from typing import Literal, Union, cast, Any
 from langchain_core.messages import AIMessage
 import logging
 import json
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 NodeType = Literal['Visualization', 'Search', 'Coder', 'Report', 'Process', 'NoteTaker', 'Hypothesis', 'QualityReview']
 ProcessNodeType = Literal['Coder', 'Search', 'Visualization', 'Report', 'Process', 'Refiner']
 
-def get_state_attr(state: Union[State, dict], key: str, default: Any = None) -> Any:
+def get_state_attr(state: State | dict[str, Any], key: str, default: Any = None) -> Any:
     """Helper to safely get attributes from State whether it's Pydantic or dict."""
     if isinstance(state, dict):
         return state.get(key, default)

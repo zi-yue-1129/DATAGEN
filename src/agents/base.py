@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Base agent class with external configuration support.
 
 This module provides the abstract base class for all agents in the system.
@@ -7,7 +8,7 @@ supports fallback to hardcoded prompts for backward compatibility.
 
 import os
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
@@ -17,6 +18,7 @@ from ..config import WORKING_DIRECTORY
 
 if TYPE_CHECKING:
     from ..core.language_models import LanguageModelManager
+    from ..core.agent_config_loader import AgentConfigLoader
 
 logger = setup_logger()
 
@@ -40,10 +42,10 @@ class BaseAgent(ABC):
     SYSTEM_PROMPT_PREFIX = "SYSTEM_PROMPT:"
 
     # Class-level config loader (shared across all agents)
-    _config_loader: Optional["AgentConfigLoader"] = None
+    _config_loader: AgentConfigLoader | None = None
 
     @classmethod
-    def get_config_loader(cls) -> "AgentConfigLoader":
+    def get_config_loader(cls) -> AgentConfigLoader:
         """Get or create the shared AgentConfigLoader instance.
 
         Returns:
@@ -57,8 +59,8 @@ class BaseAgent(ABC):
     def __init__(
         self,
         agent_name: str,
-        language_model_manager: "LanguageModelManager",
-        team_members: List[str],
+        language_model_manager: LanguageModelManager,
+        team_members: list[str],
         working_directory: str = WORKING_DIRECTORY,
         response_format: Any = None
     ) -> None:
@@ -100,7 +102,7 @@ class BaseAgent(ABC):
             max_iterations=self.max_iterations,
         )
 
-    def _load_all_tools(self) -> List:
+    def _load_all_tools(self) -> list[Any]:
         """Load all tools from various sources in priority order.
         
         Attempts external config tools first, falls back to hardcoded tools
@@ -109,7 +111,7 @@ class BaseAgent(ABC):
         Returns:
             Combined list of all available tools.
         """
-        tools: List = []
+        tools: list[Any] = []
         
         # Load from external config first
         config_tools = self._load_tools_from_config()
@@ -142,7 +144,7 @@ class BaseAgent(ABC):
         
         return tools
 
-    def _load_tools_from_config(self) -> List:
+    def _load_tools_from_config(self) -> list[Any]:
         """Load tools from external configuration.
 
         Returns:
@@ -162,7 +164,7 @@ class BaseAgent(ABC):
             logger.warning(f"Failed to load tools from config for {self.agent_name}: {e}")
             return []
 
-    def _load_mcp_tools(self) -> List:
+    def _load_mcp_tools(self) -> list[Any]:
         """Load MCP tools based on agent configuration.
 
         Reads the agent's MCP server configuration and creates LangChain
@@ -314,7 +316,7 @@ class BaseAgent(ABC):
         return ""
 
     @abstractmethod
-    def _get_tools(self) -> List:
+    def _get_tools(self) -> list[Any]:
         """Get the list of tools specific to this agent.
 
         Returns:
@@ -322,7 +324,7 @@ class BaseAgent(ABC):
         """
         pass
 
-    def get_state_updates(self, state: Any, output: Any) -> dict:
+    def get_state_updates(self, state: Any, output: Any) -> dict[str, Any]:
         """Return state field updates based on agent output.
         
         Default implementation returns empty dict (no custom updates).

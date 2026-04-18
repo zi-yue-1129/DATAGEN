@@ -1,4 +1,5 @@
-from typing import Any, Dict, Union, List
+from __future__ import annotations
+from typing import Any, Union, TYPE_CHECKING
 from langchain_core.messages import AIMessage, HumanMessage, BaseMessage
 import logging
 import json
@@ -8,16 +9,20 @@ import time
 from .state import State
 from ..config import WORKING_DIRECTORY
 
+if TYPE_CHECKING:
+    from .state import State
+    from ..agents.base import BaseAgent
+
 # Set up logger
 logger = logging.getLogger(__name__)
 
-def get_state_attr(state: Union[State, dict], key: str, default: Any = None) -> Any:
+def get_state_attr(state: State | dict[str, Any], key: str, default: Any = None) -> Any:
     """Helper to safely get attributes from State whether it's Pydantic or dict."""
     if isinstance(state, dict):
         return state.get(key, default)
     return getattr(state, key, default)
 
-def update_artifact_dict(current_artifacts: Dict[str, str], new_output: Any) -> Dict[str, str]:
+def update_artifact_dict(current_artifacts: dict[str, str], new_output: dict[str, str] | str | Any) -> dict[str, str]:
     """
     Update an artifact dictionary with new output.
     If output is a string (legacy), wrap it. 
@@ -38,7 +43,7 @@ def update_artifact_dict(current_artifacts: Dict[str, str], new_output: Any) -> 
     return updated
 
 
-def safe_get_content(output: Any, keys: List[str], default: str = "") -> str:
+def safe_get_content(output: Any, keys: list[str], default: str = "") -> str:
     """Safely extract content from output (Pydantic, dict, or str).
     
     Args:
@@ -61,7 +66,7 @@ def safe_get_content(output: Any, keys: List[str], default: str = "") -> str:
                 return str(val)
     return str(output) if output else default
 
-def agent_node(state: State, agent: Any, name: str) -> dict:
+def agent_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
     """Process an agent's action and update the state accordingly."""
     logger.info(f"Processing agent: {name}")
     try:
@@ -113,7 +118,7 @@ def agent_node(state: State, agent: Any, name: str) -> dict:
             "last_active_agent": name
         }
 
-def human_choice_node(state: State) -> dict:
+def human_choice_node(state: State) -> dict[str, Any]:
     """Handle human input to choose the next step."""
     print("Please choose the next step:")
     print("1. Regenerate hypothesis")
@@ -146,7 +151,7 @@ def create_message(message: BaseMessage, name: str) -> BaseMessage:
     message_type = message.type.lower()
     return HumanMessage(content=content) if message_type == "human" else AIMessage(content=content, name=name)
 
-def note_agent_node(state: State, agent: Any, name: str) -> dict:
+def note_agent_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
     """Process the note agent's action and update the entire state."""
     logger.info(f"Processing note agent: {name}")
     try:
@@ -209,7 +214,7 @@ def note_agent_node(state: State, agent: Any, name: str) -> dict:
         logger.error(f"Unexpected error in note_agent_node: {e}", exc_info=True)
         return _create_error_state(state, AIMessage(content=f"Unexpected error: {str(e)}", name=name), name, "Unexpected error")
 
-def _create_error_state(state: State, error_message: AIMessage, name: str, error_type: str) -> dict:
+def _create_error_state(state: State, error_message: AIMessage, name: str, error_type: str) -> dict[str, Any]:
     """Create an error state when an exception occurs."""
     logger.info(f"Creating error state for {name}: {error_type}")
     
@@ -221,7 +226,7 @@ def _create_error_state(state: State, error_message: AIMessage, name: str, error
     
     return current_dict
 
-def human_review_node(state: State) -> dict:
+def human_review_node(state: State) -> dict[str, Any]:
     """Display current state and handle user interaction."""
     try:
         print("Current research progress:")
@@ -252,7 +257,7 @@ def human_review_node(state: State) -> dict:
         logger.error(f"Error: {str(e)}", exc_info=True)
         return {"messages": [AIMessage(content=f"Error: {str(e)}", name="human_review")]}
 
-def refiner_node(state: State, agent: Any, name: str) -> dict:
+def refiner_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
     """Process report materials with refiner agent."""
     try:
         storage_path = Path(WORKING_DIRECTORY)

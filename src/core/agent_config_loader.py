@@ -116,8 +116,8 @@ class AgentConfigLoader:
 
     def __init__(
         self,
-        config_root: Optional[str] = None,
-        mcp_config_path: Optional[str] = None
+        config_root: str | Path | None = None,
+        mcp_config_path: str | Path | None = None
     ) -> None:
         """Initialize the agent configuration loader.
 

@@ -119,7 +119,7 @@ class MCPManager:
         config_path: Path to the MCP configuration file.
     """
 
-    def __init__(self, config_path: Optional[str] = None) -> None:
+    def __init__(self, config_path: str | Path | None = None) -> None:
         """Initialize the MCP manager.
 
         Args:

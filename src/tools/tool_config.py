@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Centralized configuration for tool security and resource limits.
 
 This module provides dataclasses for tool limits and a configuration manager
@@ -99,7 +100,7 @@ class ToolConfig:
         self.enable_write_validation = enable_write_validation
 
     @classmethod
-    def load(cls, config_path: Optional[str] = None) -> "ToolConfig":
+    def load(cls, config_path: str | Path | None = None) -> ToolConfig:
         """Load configuration from YAML file with defaults as fallback.
         
         Args:

@@ -1,3 +1,5 @@
+from __future__ import annotations
+from typing import Any, TYPE_CHECKING
 from .openai import OpenAIProvider
 from .anthropic import AnthropicProvider
 from .google import GoogleProvider
@@ -5,11 +7,14 @@ from .ollama import OllamaProvider
 from .azure import AzureChatOpenAIProvider
 from .groq import ChatGroqProvider
 
+if TYPE_CHECKING:
+    from .base import BaseProvider
+
 
 class ProviderFactory:
     """A factory class for creating LLM providers."""
 
-    def create_provider(self, provider_name: str, **kwargs):
+    def create_provider(self, provider_name: str, **kwargs: Any) -> BaseProvider:
         """
         Creates a provider instance based on the provider name.
 
