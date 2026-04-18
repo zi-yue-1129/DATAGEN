@@ -56,13 +56,18 @@ class ProcessAgent(BaseAgent):
         
         Args:
             state: The current workflow state.
-            output: The agent's ProcessRouteSchema output.
+            output: The agent's ProcessRouteSchema output or a dict.
             
         Returns:
             Dict with workflow routing fields.
         """
+        def safe_get(obj, key, default=None):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+
         return {
-            "current_instruction": getattr(output, "current_instruction", getattr(output, "task", "")),
-            "next_workflow_step": getattr(output, "next_workflow_step", getattr(output, "next", "")),
-            "todo_list": getattr(output, "todo_list", [])
+            "current_instruction": safe_get(output, "current_instruction", safe_get(output, "task", "")),
+            "next_workflow_step": safe_get(output, "next_workflow_step", safe_get(output, "next", "")),
+            "todo_list": safe_get(output, "todo_list", [])
         }

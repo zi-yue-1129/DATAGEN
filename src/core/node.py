@@ -3,6 +3,7 @@ from typing import Any, Union, TYPE_CHECKING
 from langchain_core.messages import AIMessage, HumanMessage, BaseMessage
 import logging
 import json
+import re
 from pathlib import Path
 import time
 
@@ -44,27 +45,71 @@ def update_artifact_dict(current_artifacts: dict[str, str], new_output: dict[str
 
 
 def safe_get_content(output: Any, keys: list[str], default: str = "") -> str:
-    """Safely extract content from output (Pydantic, dict, or str).
-    
-    Args:
-        output: The agent output (Pydantic model, dict, or string).
-        keys: Priority list of attribute/key names to try.
-        default: Default value if no key found.
-        
-    Returns:
-        Extracted string content.
-    """
+    """Safely extract content from output (Pydantic, dict, or str)."""
     if isinstance(output, str):
         return output
-    for key in keys:
-        if isinstance(output, dict):
+    if isinstance(output, dict):
+        for key in keys:
             if key in output:
                 return str(output[key])
-        elif hasattr(output, key):
+        return str(output)
+    
+    for key in keys:
+        if hasattr(output, key):
             val = getattr(output, key, None)
             if val is not None:
                 return str(val)
     return str(output) if output else default
+
+def extract_json_from_text(text: str) -> dict[str, Any] | None:
+    """Extract and parse JSON from text, handling markdown blocks."""
+    if not text:
+        return None
+        
+    # Try markdown block first
+    json_match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
+    if json_match:
+        try:
+            return json.loads(json_match.group(1))
+        except json.JSONDecodeError:
+            pass
+            
+    # Try finding the first '{' and last '}'
+    start_idx = text.find('{')
+    end_idx = text.rfind('}')
+    if start_idx != -1 and end_idx != -1:
+        try:
+            return json.loads(text[start_idx:end_idx+1])
+        except json.JSONDecodeError:
+            pass
+            
+    return None
+
+def get_structured_output(result: Any, agent: BaseAgent) -> Any:
+    """Extract structured output from agent result, with fallback parsing."""
+    # 1. Direct structured response in result dict
+    if isinstance(result, dict) and "structured_response" in result:
+        return result["structured_response"]
+        
+    # 2. Result itself might be the structured object (Pydantic)
+    if hasattr(result, "dict") or hasattr(result, "model_dump"):
+        return result
+        
+    # 3. Last message content might be a JSON string
+    content = ""
+    if isinstance(result, dict) and "messages" in result and result["messages"]:
+        content = result["messages"][-1].content
+    elif hasattr(result, "content"):
+        content = result.content
+    elif isinstance(result, str):
+        content = result
+        
+    if content:
+        parsed = extract_json_from_text(content)
+        if parsed:
+            return parsed
+            
+    return None
 
 def agent_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
     """Process an agent's action and update the state accordingly."""
@@ -72,34 +117,32 @@ def agent_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
     try:
         result = agent.invoke(state)
         
-        # Generic handling for structured output
-        if "structured_response" in result:
-            output = result["structured_response"]
-            # Extract meaningful content for the message history using safe helper
-            content = safe_get_content(output, ["task", "feedback", "summary"])
+        # Robust structured output extraction
+        output = get_structured_output(result, agent)
+        
+        # Extract content for AI message
+        if output:
+            content = safe_get_content(output, ["task", "feedback", "summary", "current_instruction"])
             ai_message = AIMessage(content=content, name=name)
         else:
-            # Standard agents usually return a dict with messages
-            message = result.get("messages")[-1]
-            output = message.content
-            ai_message = AIMessage(content=output, name=name)
+            # Fallback to last message or raw result
+            if isinstance(result, dict) and "messages" in result:
+                ai_message = result["messages"][-1]
+                output = ai_message.content
+            else:
+                output = str(result)
+                ai_message = AIMessage(content=output, name=name)
 
         # Base Updates
+        current_messages = list(get_state_attr(state, "messages", []))
         updates = {
-            "messages": [ai_message],
+            "messages": current_messages + [ai_message],
             "last_active_agent": name
         }
 
-        # StateUpdater Protocol: call agent's get_state_updates if available
-        # All agents should implement this method for their specific state mappings
+        # StateUpdater Protocol
         if hasattr(agent, "get_state_updates"):
-            # Pass the structured object if available, otherwise pass the raw string
-            # This ensures agents like QualityReviewAgent receive the QualityOutput model
-            update_source = output
-            if "structured_response" in result:
-                update_source = result["structured_response"]
-            
-            agent_updates = agent.get_state_updates(state, update_source)
+            agent_updates = agent.get_state_updates(state, output)
             if agent_updates:
                 updates.update(agent_updates)
         
@@ -119,8 +162,9 @@ def agent_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
         
     except Exception as e:
         logger.error(f"Error in {name}: {str(e)}", exc_info=True)
+        current_messages = list(get_state_attr(state, "messages", []))
         return {
-            "messages": [AIMessage(content=f"Error: {str(e)}", name=name)],
+            "messages": current_messages + [AIMessage(content=f"Error: {str(e)}", name=name)],
             "last_active_agent": name
         }
 
@@ -136,25 +180,31 @@ def human_choice_node(state: State) -> dict[str, Any]:
             break
         print("Invalid input, please try again.")
     
+    current_messages = list(get_state_attr(state, "messages", []))
     updates = {
-        "messages": [],
+        "messages": current_messages,
         "last_active_agent": "human"
     }
     
     if choice == "1":
         modification_areas = input("Specify areas to modify: ")
-        updates["messages"] = [HumanMessage(content=f"Regenerate hypothesis. Areas: {modification_areas}")]
+        updates["messages"] = current_messages + [HumanMessage(content=f"Regenerate hypothesis. Areas: {modification_areas}")]
         updates["hypothesis"] = None  # Clear hypothesis
     else:
-        updates["messages"] = [HumanMessage(content="Continue the research process")]
+        updates["messages"] = current_messages + [HumanMessage(content="Continue the research process")]
         updates["current_instruction"] = "Continue the research process"
     
     return updates
 
-def create_message(message: BaseMessage, name: str) -> BaseMessage:
+def create_message(message: Any, name: str) -> BaseMessage:
     """Create a BaseMessage object based on the message type."""
-    content = message.content
-    message_type = message.type.lower()
+    if isinstance(message, dict):
+        content = message.get("content", "")
+        message_type = str(message.get("type", "ai")).lower()
+    else:
+        content = getattr(message, "content", str(message))
+        message_type = str(getattr(message, "type", "ai")).lower()
+        
     return HumanMessage(content=content) if message_type == "human" else AIMessage(content=content, name=name)
 
 def note_agent_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
@@ -181,33 +231,47 @@ def note_agent_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]
         invoke_state["messages"] = processing_messages
         
         result = agent.invoke(invoke_state)
-        output = result.get("structured_response")
+        output = get_structured_output(result, agent)
         
         if not output:
-            logger.error(f"Note agent {name} failed to return structured_response")
-            return _create_error_state(state, AIMessage(content=f"Error: Agent {name} failed to return structured response", name=name), name, "Missing structured response")
+            logger.error(f"Note agent {name} failed to return structured response. Result: {str(result)[:500]}")
+            # Try to use raw message if available
+            raw_content = ""
+            if isinstance(result, dict) and "messages" in result and result["messages"]:
+                raw_content = result["messages"][-1].content
+            elif hasattr(result, "content"):
+                raw_content = result.content
+            
+            return _create_error_state(state, AIMessage(content=f"Error: Agent {name} failed to return structured response. Raw: {raw_content[:200]}", name=name), name, "Missing structured response")
 
-        new_messages = [create_message(msg, name) for msg in output.messages]
+        # Map NoteState output fields to New State Schema
+        # Use helper for safe attribute access
+        def safe_get(obj, key, default=""):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+
+        new_messages_data = safe_get(output, "messages", [])
+        new_messages = [create_message(msg, name) for msg in new_messages_data] if isinstance(new_messages_data, list) else []
         messages: list[BaseMessage] = list(new_messages) if new_messages else list(processing_messages)
         combined_messages = head_messages + messages + tail_messages
         
-        # Map NoteState output fields to New State Schema
         updated_state = {
             "messages": combined_messages,
-            "hypothesis": str(getattr(output, "hypothesis", "")),
+            "hypothesis": str(safe_get(output, "hypothesis", "")),
             
-            # Semantic Mapping: Try new field first, then legacy
-            "current_instruction": str(getattr(output, "current_instruction", getattr(output, "process", ""))),
-            "next_workflow_step": str(getattr(output, "next_workflow_step", getattr(output, "process_decision", ""))),
+            # Semantic Mapping
+            "current_instruction": str(safe_get(output, "current_instruction", safe_get(output, "process", ""))),
+            "next_workflow_step": str(safe_get(output, "next_workflow_step", safe_get(output, "process_decision", ""))),
             
             # Artifact Mapping
-            "search_artifacts": update_artifact_dict({}, str(getattr(output, "search_artifacts", getattr(output, "searcher_state", "")))),
-            "data_viz_artifacts": update_artifact_dict({}, str(getattr(output, "data_viz_artifacts", getattr(output, "visualization_state", "")))),
-            "code_artifacts": update_artifact_dict({}, str(getattr(output, "code_artifacts", getattr(output, "code_state", "")))),
-            "report_artifacts": update_artifact_dict({}, str(getattr(output, "report_artifacts", getattr(output, "report_section", "")))),
+            "search_artifacts": update_artifact_dict({}, str(safe_get(output, "search_artifacts", safe_get(output, "searcher_state", "")))),
+            "data_viz_artifacts": update_artifact_dict({}, str(safe_get(output, "data_viz_artifacts", safe_get(output, "visualization_state", "")))),
+            "code_artifacts": update_artifact_dict({}, str(safe_get(output, "code_artifacts", safe_get(output, "code_state", "")))),
+            "report_artifacts": update_artifact_dict({}, str(safe_get(output, "report_artifacts", safe_get(output, "report_section", "")))),
             
-            "quality_feedback": str(getattr(output, "quality_feedback", getattr(output, "quality_review", ""))),
-            "needs_revision": bool(getattr(output, "needs_revision", False)),
+            "quality_feedback": str(safe_get(output, "quality_feedback", safe_get(output, "quality_review", ""))),
+            "needs_revision": bool(safe_get(output, "needs_revision", False)),
             
             "last_active_agent": 'note_agent'
         }
@@ -258,8 +322,9 @@ def human_review_node(state: State) -> dict[str, Any]:
         return updates
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}", exc_info=True)
-        return {"messages": [AIMessage(content=f"Error: {str(e)}", name="human_review")]}
+        logger.error(f"Error in human_review: {str(e)}", exc_info=True)
+        current_messages = list(get_state_attr(state, "messages", []))
+        return {"messages": current_messages + [AIMessage(content=f"Error: {str(e)}", name="human_review")]}
 
 def refiner_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
     """Process report materials with refiner agent."""
@@ -283,15 +348,15 @@ def refiner_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
         result = agent.invoke(refiner_input)
         output = result.get("messages")[-1].content
         
+        current_messages = list(get_state_attr(state, "messages", []))
         return {
-            "messages": [AIMessage(content=output, name=name)],
+            "messages": current_messages + [AIMessage(content=output, name=name)],
             "last_active_agent": name,
-            # Refiner usually outputs the final report or refinement
-            # We could map this to 'report_artifacts' or just messages for now
         }
         
     except Exception as e:
-        logger.error(f"Error in refiner_node: {str(e)}", exc_info=True)
-        return {"messages": [AIMessage(content=f"Error: {str(e)}", name=name)]}
+        logger.error(f"Error in {name}: {str(e)}", exc_info=True)
+        current_messages = list(get_state_attr(state, "messages", []))
+        return {"messages": current_messages + [AIMessage(content=f"Error: {str(e)}", name=name)]}
 
 logger.info("Agent processing module initialized")

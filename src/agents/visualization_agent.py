@@ -36,16 +36,12 @@ class VisualizationAgent(BaseAgent):
         return [read_document, execute_code, execute_command, list_directory]
 
     def get_state_updates(self, state: "State", output: Any) -> Dict[str, Any]:
-        """Return state updates for visualization artifacts.
-        
-        Args:
-            state: The current workflow state.
-            output: The agent's ArtifactSchema output.
-            
-        Returns:
-            Dict with 'data_viz_artifacts' field update.
-        """
-        current = get_state_attr(state, "data_viz_artifacts", {})
-        new_data = getattr(output, "artifacts", output)
-        return {"data_viz_artifacts": update_artifact_dict(current, new_data)}
+        """Return state updates for visualization artifacts."""
+        def safe_get(obj, key, default=None):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
 
+        current = get_state_attr(state, "data_viz_artifacts", {})
+        new_data = safe_get(output, "artifacts", output)
+        return {"data_viz_artifacts": update_artifact_dict(current, new_data)}

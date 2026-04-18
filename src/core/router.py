@@ -79,6 +79,12 @@ def process_router(state: State) -> ProcessNodeType:
     if next_step == "FINISH":
         return "Refiner"
     
+    # Safety: prevent infinite loop if manager keeps failing
+    step_count = get_state_attr(state, "step_count", 0)
+    if step_count > 20:
+        logger.warning(f"Step count ({step_count}) too high with invalid decision '{next_step}'. Forcing FINISH.")
+        return "Refiner"
+
     logger.warning(f"Invalid decision: {next_step}. Defaulting to 'Process'.")
     return "Process"
 

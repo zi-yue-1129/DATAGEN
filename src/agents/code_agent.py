@@ -40,12 +40,19 @@ class CodeAgent(BaseAgent):
         
         Args:
             state: The current workflow state.
-            output: The agent's ArtifactSchema output.
+            output: The agent's ArtifactSchema output or a dict.
             
         Returns:
             Dict with 'code_artifacts' field update.
         """
+        def safe_get(obj, key, default=None):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+
         current = get_state_attr(state, "code_artifacts", {})
-        new_data = getattr(output, "artifacts", output)
+        # If output contains 'artifacts' key/attr, use it, otherwise use the whole output
+        new_data = safe_get(output, "artifacts", output)
+        
         return {"code_artifacts": update_artifact_dict(current, new_data)}
 

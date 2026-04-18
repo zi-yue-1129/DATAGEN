@@ -18,7 +18,7 @@ class State(BaseModel):
     )
 
     # === Context Layer ===
-    messages: Annotated[list[BaseMessage], add_messages] = Field(
+    messages: list[BaseMessage] = Field(
         default_factory=list,
         description="Sequence of messages exchanged in the workflow"
     )
