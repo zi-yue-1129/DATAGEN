@@ -1,6 +1,10 @@
 .env
 *.log
-data
+data/
 *__pycache__/
-chromedriver
+chromedriver/
 .roomodes
+
+# Local configurations
+config_local/
+config_*/

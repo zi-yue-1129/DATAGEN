@@ -88,6 +88,7 @@ WORKING_DIRECTORY = ./data/
 # Configuration directory path (optional)
 # All config files (agent_models.yaml, agents/, mcp.yaml) are relative to this directory.
 # Default is config/
+# Use 'config_local' for local development to avoid Git tracking (already in .gitignore)
 CONFIG_DIRECTORY = config
 
 # Conda environment name (required)
@@ -109,6 +110,8 @@ GOOGLE_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 # LangChain API key (optional)
 # Used for monitoring the processing
+LANGCHAIN_TRACING_V2 = true
+LANGCHAIN_PROJECT = "Multi-agent-DataAnalysis"
 LANGCHAIN_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 # MCP (Model Context Protocol) Settings (optional)
