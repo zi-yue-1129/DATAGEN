@@ -119,12 +119,16 @@ class MCPManager:
         config_path: Path to the MCP configuration file.
     """
 
-    def __init__(self, config_path: str = "config/mcp.yaml") -> None:
+    def __init__(self, config_path: Optional[str] = None) -> None:
         """Initialize the MCP manager.
 
         Args:
             config_path: Path to the MCP configuration file.
         """
+        if config_path is None:
+            config_dir = os.getenv('CONFIG_DIRECTORY', 'config')
+            config_path = os.path.join(config_dir, "mcp.yaml")
+            
         self.config_path = Path(config_path)
         self._config: Optional[Dict[str, Any]] = None
         self._servers: Dict[str, MCPServerConfig] = {}

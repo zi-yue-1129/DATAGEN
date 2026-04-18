@@ -116,8 +116,8 @@ class AgentConfigLoader:
 
     def __init__(
         self,
-        config_root: str = "config/agents",
-        mcp_config_path: str = "config/mcp.yaml"
+        config_root: Optional[str] = None,
+        mcp_config_path: Optional[str] = None
     ) -> None:
         """Initialize the agent configuration loader.
 
@@ -125,6 +125,15 @@ class AgentConfigLoader:
             config_root: Root directory containing agent configurations.
             mcp_config_path: Path to the MCP server configuration file.
         """
+        # Load base config directory from environment
+        config_dir = os.getenv('CONFIG_DIRECTORY', 'config')
+        
+        # Set defaults relative to config_dir if not provided
+        if config_root is None:
+            config_root = os.path.join(config_dir, "agents")
+        if mcp_config_path is None:
+            mcp_config_path = os.path.join(config_dir, "mcp.yaml")
+            
         self.config_root = Path(config_root)
         self.mcp_config_path = Path(mcp_config_path)
         self._metadata_cache: Dict[str, AgentMetadata] = {}

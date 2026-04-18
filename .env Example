@@ -1,6 +1,11 @@
 # Your data storage path(required)
 WORKING_DIRECTORY =./data/
 
+# Configuration directory path (optional)
+# All config files (agent_models.yaml, agents/, mcp.yaml) are relative to this directory.
+# Default is config/
+CONFIG_DIRECTORY = config
+
 # Conda environment name(required)
 CONDA_ENV = datagen
 

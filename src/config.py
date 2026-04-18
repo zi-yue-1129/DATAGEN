@@ -14,6 +14,8 @@ WORKING_DIRECTORY = os.getenv('WORKING_DIRECTORY', './data')
 CONDA_ENV = os.getenv('CONDA_ENV', 'base')
 # Get ChromeDriver
 CHROMEDRIVER_PATH = os.getenv('CHROMEDRIVER_PATH', './chromedriver/chromedriver')
+# Get Config Directory
+CONFIG_DIRECTORY = os.getenv('CONFIG_DIRECTORY', 'config')
 
 
 class AgentModelsConfig:
@@ -76,4 +78,4 @@ class AgentModelsConfig:
 
 
 # Create global instance
-AGENT_MODELS = AgentModelsConfig()
+AGENT_MODELS = AgentModelsConfig(os.path.join(CONFIG_DIRECTORY, 'agent_models.yaml'))

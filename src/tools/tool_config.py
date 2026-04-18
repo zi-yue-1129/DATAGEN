@@ -99,7 +99,7 @@ class ToolConfig:
         self.enable_write_validation = enable_write_validation
 
     @classmethod
-    def load(cls, config_path: str = "config/tool_limits.yaml") -> "ToolConfig":
+    def load(cls, config_path: Optional[str] = None) -> "ToolConfig":
         """Load configuration from YAML file with defaults as fallback.
         
         Args:
@@ -108,6 +108,9 @@ class ToolConfig:
         Returns:
             ToolConfig instance with loaded or default settings.
         """
+        if config_path is None:
+            config_dir = os.getenv('CONFIG_DIRECTORY', 'config')
+            config_path = os.path.join(config_dir, "tool_limits.yaml")
         settings = {}
 
         # Try multiple paths to find the config
