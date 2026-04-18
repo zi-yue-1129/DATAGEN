@@ -259,7 +259,12 @@ class BaseAgent(ABC):
         """
         provider = self.language_model_manager.get_provider(self.agent_name)
         model_class = provider.get_model_class()
-        config = self.language_model_manager.get_model_config(self.agent_name)
+        config = self.language_model_manager.get_model_config(self.agent_name).copy()
+        
+        # Add a default timeout to prevent indefinite hanging
+        if "timeout" not in config:
+            config["timeout"] = 60
+            
         return model_class(**config)
 
     def invoke(self, state: Any) -> Any:

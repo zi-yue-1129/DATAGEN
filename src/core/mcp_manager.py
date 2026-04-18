@@ -136,24 +136,24 @@ class MCPManager:
         self._global_lock = asyncio.Lock()
         self._main_loop: Optional[asyncio.AbstractEventLoop] = None
         self._mcp_stderr_file = None
-
-    def _get_lock(self, server_name: str) -> asyncio.Lock:
-        """Get or create a lock for a specific server."""
-        if server_name not in self._connection_locks:
-            self._connection_locks[server_name] = asyncio.Lock()
-        return self._connection_locks[server_name]
         
         # Setup a loop exception handler to swallow noisy anyio/asyncio errors
         try:
             loop = asyncio.get_event_loop()
             def silent_exception_handler(loop, context):
-                msg = context.get("message")
+                msg = context.get("message", "")
                 if "asynchronous generator" in msg or "cancel scope" in msg:
                     return
                 loop.default_exception_handler(context)
             loop.set_exception_handler(silent_exception_handler)
         except Exception:
             pass
+
+    def _get_lock(self, server_name: str) -> asyncio.Lock:
+        """Get or create a lock for a specific server."""
+        if server_name not in self._connection_locks:
+            self._connection_locks[server_name] = asyncio.Lock()
+        return self._connection_locks[server_name]
 
     @property
     def config(self) -> Dict[str, Any]:
@@ -440,14 +440,25 @@ class MCPManager:
                 # Extract content from result
                 contents = []
                 for content in result.content:
+                    text = ""
                     if isinstance(content, mcp_types.TextContent):
-                        contents.append(content.text)
+                        text = content.text
                     elif hasattr(content, 'text'):
-                        contents.append(content.text)
+                        text = content.text
                     elif hasattr(content, 'data'):
                         contents.append(f"[Binary data: {len(content.data)} bytes]")
+                        continue
                     else:
-                        contents.append(str(content))
+                        text = str(content)
+                    
+                    # Filter out common MCP startup banners that sometimes leak into stdout
+                    if "Secure MCP Filesystem Server running on stdio" in text:
+                        continue
+                    if "Client does not support MCP Roots" in text:
+                        continue
+                    
+                    if text:
+                        contents.append(text)
 
                 return "\n".join(contents)
 

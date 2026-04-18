@@ -93,7 +93,13 @@ def agent_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
         # StateUpdater Protocol: call agent's get_state_updates if available
         # All agents should implement this method for their specific state mappings
         if hasattr(agent, "get_state_updates"):
-            agent_updates = agent.get_state_updates(state, output)
+            # Pass the structured object if available, otherwise pass the raw string
+            # This ensures agents like QualityReviewAgent receive the QualityOutput model
+            update_source = output
+            if "structured_response" in result:
+                update_source = result["structured_response"]
+            
+            agent_updates = agent.get_state_updates(state, update_source)
             if agent_updates:
                 updates.update(agent_updates)
         
@@ -175,22 +181,20 @@ def note_agent_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]
         invoke_state["messages"] = processing_messages
         
         result = agent.invoke(invoke_state)
-        output = result["structured_response"]
+        output = result.get("structured_response")
+        
+        if not output:
+            logger.error(f"Note agent {name} failed to return structured_response")
+            return _create_error_state(state, AIMessage(content=f"Error: Agent {name} failed to return structured response", name=name), name, "Missing structured response")
 
         new_messages = [create_message(msg, name) for msg in output.messages]
         messages: list[BaseMessage] = list(new_messages) if new_messages else list(processing_messages)
         combined_messages = head_messages + messages + tail_messages
         
         # Map NoteState output fields to New State Schema
-        # Note: NoteAgent likely still returns NoteState structure until updated.
-        # We map what we can.
-        
-        # Map NoteState output fields to New State Schema
-        # Support both semantic new keys and legacy keys during migration
-        
         updated_state = {
             "messages": combined_messages,
-            "hypothesis": str(output.hypothesis),
+            "hypothesis": str(getattr(output, "hypothesis", "")),
             
             # Semantic Mapping: Try new field first, then legacy
             "current_instruction": str(getattr(output, "current_instruction", getattr(output, "process", ""))),
@@ -267,8 +271,6 @@ def refiner_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
         for fpath in storage_path.glob("*.md"):
              with open(fpath, "r", encoding="utf-8") as f:
                 materials.append(f"MD file '{fpath.name}':\n{f.read()}")
-        
-        # ... pngs ...
         
         combined_materials = "\n\n".join(materials)
         report_content = f"Report materials:\n{combined_materials}"

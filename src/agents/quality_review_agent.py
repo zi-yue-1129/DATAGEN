@@ -6,6 +6,10 @@ from ..tools.FileEdit import create_document, read_document, edit_document
 from .base import BaseAgent
 from ..config import WORKING_DIRECTORY
 from ..core.node import get_state_attr
+from ..logger import setup_logger
+
+# Initialize logger
+logger = setup_logger()
 
 if TYPE_CHECKING:
     from ..core.language_models import LanguageModelManager
@@ -53,16 +57,26 @@ class QualityReviewAgent(BaseAgent):
         
         Args:
             state: The current workflow state.
-            output: The agent's QualityOutput.
+            output: The agent's QualityOutput or a raw string if parsing failed.
             
         Returns:
             Dict with revision control fields.
         """
-        updates: Dict[str, Any] = {"needs_revision": output.needs_revision}
+        # Handle cases where output might be a raw string due to parsing issues
+        if isinstance(output, str):
+            logger.warning(f"QualityReviewAgent received string instead of QualityOutput: {output[:100]}...")
+            # Heuristic: if the agent mentioned revision or improvement, assume needs_revision=True
+            needs_revision = any(kw in output.lower() for kw in ["revision", "improve", "fix", "correct", "change"])
+            feedback = output
+        else:
+            needs_revision = getattr(output, "needs_revision", False)
+            feedback = getattr(output, "feedback", "")
+
+        updates: Dict[str, Any] = {"needs_revision": needs_revision}
         
         current_count = get_state_attr(state, "revision_count", 0)
-        if output.needs_revision:
-            updates["quality_feedback"] = output.feedback
+        if needs_revision:
+            updates["quality_feedback"] = feedback
             updates["revision_count"] = current_count + 1
         else:
             # Review passed: clear feedback and reset counter

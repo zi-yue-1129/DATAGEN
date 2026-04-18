@@ -28,6 +28,8 @@ def google_search(query: Annotated[str, "The search query to use"]) -> Annotated
         service = Service(CHROMEDRIVER_PATH)
 
         with webdriver.Chrome(options=chrome_options, service=service) as driver:
+            # Set a timeout to prevent hanging on slow network
+            driver.set_page_load_timeout(30)
             url = f"https://www.google.com/search?q={query}"
             logger.debug(f"Accessing URL: {url}")
             driver.get(url)

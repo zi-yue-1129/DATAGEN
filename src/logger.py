@@ -45,9 +45,9 @@ def setup_logger(log_file:str='agent.log'):
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
 
-    # Console handler (Strictly WARNING and filtered)
+    # Console handler (Filtered progress)
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.WARNING)
+    console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
 
     # Add handlers
