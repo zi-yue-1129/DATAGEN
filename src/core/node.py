@@ -9,6 +9,7 @@ import time
 
 from .state import State
 from ..config import WORKING_DIRECTORY
+from ..utils.ui import UI
 
 if TYPE_CHECKING:
     from .state import State
@@ -46,19 +47,24 @@ def update_artifact_dict(current_artifacts: dict[str, str], new_output: dict[str
 
 def safe_get_content(output: Any, keys: list[str], default: str = "") -> str:
     """Safely extract content from output (Pydantic, dict, or str)."""
-    if isinstance(output, str):
+    if isinstance(output, str) and output.strip():
         return output
-    if isinstance(output, dict):
-        for key in keys:
-            if key in output:
-                return str(output[key])
-        return str(output)
     
-    for key in keys:
+    # Check for common reasoning/content keys
+    all_keys = keys + ["thought", "reasoning", "analysis", "reflection", "response", "answer"]
+    
+    if isinstance(output, dict):
+        for key in all_keys:
+            if key in output and output[key]:
+                return str(output[key])
+        return str(output) if output else default
+    
+    for key in all_keys:
         if hasattr(output, key):
             val = getattr(output, key, None)
-            if val is not None:
+            if val:
                 return str(val)
+    
     return str(output) if output else default
 
 def extract_json_from_text(text: str) -> dict[str, Any] | None:
@@ -113,7 +119,7 @@ def get_structured_output(result: Any, agent: BaseAgent) -> Any:
 
 def agent_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
     """Process an agent's action and update the state accordingly."""
-    logger.info(f"Processing agent: {name}")
+    logger.debug(f"Processing agent: {name}")
     try:
         result = agent.invoke(state)
         
@@ -122,16 +128,22 @@ def agent_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
         
         # Extract content for AI message
         if output:
-            content = safe_get_content(output, ["task", "feedback", "summary", "current_instruction"])
+            content = safe_get_content(output, ["task", "feedback", "summary", "current_instruction", "hypothesis"])
             ai_message = AIMessage(content=content, name=name)
         else:
             # Fallback to last message or raw result
-            if isinstance(result, dict) and "messages" in result:
-                ai_message = result["messages"][-1]
-                output = ai_message.content
+            if isinstance(result, dict) and "messages" in result and result["messages"]:
+                last_msg = result["messages"][-1]
+                if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+                    # Provide visual feedback for tool-using agents
+                    tool_names = [tc['name'] for tc in last_msg.tool_calls]
+                    content = f"*CALLING TOOLS:* {', '.join(tool_names)}"
+                else:
+                    content = last_msg.content or f"*(代理人 {name} 已完成任務)*"
+                ai_message = AIMessage(content=content, name=name)
             else:
-                output = str(result)
-                ai_message = AIMessage(content=output, name=name)
+                content = str(result) if result else f"*(代理人 {name} 無返回內容)*"
+                ai_message = AIMessage(content=content, name=name)
 
         # Base Updates
         current_messages = list(get_state_attr(state, "messages", []))
@@ -170,15 +182,17 @@ def agent_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
 
 def human_choice_node(state: State) -> dict[str, Any]:
     """Handle human input to choose the next step."""
-    print("Please choose the next step:")
-    print("1. Regenerate hypothesis")
-    print("2. Continue the research process")
+    choice_map = {
+        "重新生成假設 (Regenerate hypothesis)": "1",
+        "繼續研究流程 (Continue research process)": "2"
+    }
     
-    while True:
-        choice = input("Please enter your choice (1 or 2): ")
-        if choice in ["1", "2"]:
-            break
-        print("Invalid input, please try again.")
+    choice_text = UI.ask_choice("請選擇下一步：", list(choice_map.keys()))
+    if not choice_text:
+        # Default fallback if user cancels (Esc)
+        choice = "2"
+    else:
+        choice = choice_map[choice_text]
     
     current_messages = list(get_state_attr(state, "messages", []))
     updates = {
@@ -187,7 +201,7 @@ def human_choice_node(state: State) -> dict[str, Any]:
     }
     
     if choice == "1":
-        modification_areas = input("Specify areas to modify: ")
+        modification_areas = UI.ask_text("請指定需要修改的領域：")
         updates["messages"] = current_messages + [HumanMessage(content=f"Regenerate hypothesis. Areas: {modification_areas}")]
         updates["hypothesis"] = None  # Clear hypothesis
     else:
@@ -297,24 +311,17 @@ def _create_error_state(state: State, error_message: AIMessage, name: str, error
 def human_review_node(state: State) -> dict[str, Any]:
     """Display current state and handle user interaction."""
     try:
-        print("Current research progress:")
-        print(state)
-        print("\nDo you need additional analysis or modifications?")
+        UI.print_system_info("當前研究進度摘要已顯示。")
         
-        while True:
-            user_input = input("Enter 'yes' to continue analysis, or 'no' to end the research: ").lower()
-            if user_input in ['yes', 'no']:
-                break
+        needs_more = UI.ask_choice("您是否需要額外的分析或修改？", ["是 (Yes)", "否 (No)"]) == "是 (Yes)"
         
         updates: dict[str, Any] = {"last_active_agent": "human"}
         
-        if user_input == 'yes':
-            while True:
-                req = input("Please enter your request: ").strip()
-                if req:
-                    updates["messages"] = [HumanMessage(content=req)]
-                    updates["needs_revision"] = True
-                    break
+        if needs_more:
+            req = UI.ask_text("請輸入您的需求：")
+            if req:
+                updates["messages"] = [HumanMessage(content=req)]
+                updates["needs_revision"] = True
         else:
             updates["needs_revision"] = False
             updates["revision_count"] = 0

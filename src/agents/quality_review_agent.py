@@ -64,7 +64,7 @@ class QualityReviewAgent(BaseAgent):
         """
         # Handle cases where output might be a raw string due to parsing issues
         if isinstance(output, str):
-            logger.warning(f"QualityReviewAgent received string instead of QualityOutput: {output[:100]}...")
+            logger.debug(f"QualityReviewAgent received string instead of QualityOutput: {output[:100]}...")
             # Heuristic: if the agent mentioned revision or improvement, assume needs_revision=True
             needs_revision = any(kw in output.lower() for kw in ["revision", "improve", "fix", "correct", "change"])
             feedback = output

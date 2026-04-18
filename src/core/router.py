@@ -4,6 +4,7 @@ from typing import Literal, Union, cast, Any
 from langchain_core.messages import AIMessage
 import logging
 import json
+from ..utils.ui import UI
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ def hypothesis_router(state: State) -> NodeType:
     """
     Route based on the presence of a hypothesis in the state.
     """
-    logger.info("Entering hypothesis_router")
+    logger.debug("Entering hypothesis_router")
     # Semantic change: check 'current_instruction' instead of 'process'
     current_instruction = get_state_attr(state, "current_instruction")
     
@@ -35,7 +36,7 @@ def QualityReview_router(state: State) -> str:
     """
     Route based on the quality review outcome and process decision.
     """
-    logger.info("Entering QualityReview_router")
+    logger.debug("Entering QualityReview_router")
     messages = get_state_attr(state, "messages", [])
     needs_revision = get_state_attr(state, "needs_revision", False)
     revision_count = get_state_attr(state, "revision_count", 0)
@@ -45,7 +46,8 @@ def QualityReview_router(state: State) -> str:
     if needs_revision:
         # Check for infinite loop / max revisions
         if revision_count > MAX_REVISIONS:
-            logger.warning(f"Max revisions ({MAX_REVISIONS}) reached. Forcing progression to NoteTaker.")
+            logger.debug(f"Max revisions ({MAX_REVISIONS}) reached. Forcing progression to NoteTaker.")
+            UI.print_system_info(f"已達到最大修訂次數 ({MAX_REVISIONS})，系統正自動推進至筆記彙整階段。")
             return "NoteTaker"
 
         previous_node = messages[-2].name if len(messages) >= 2 else "NoteTaker"
@@ -67,7 +69,7 @@ def process_router(state: State) -> ProcessNodeType:
     """
     Route based on the process decision in the state.
     """
-    logger.info("Entering process_router")
+    logger.debug("Entering process_router")
     # Semantic change: 'next_workflow_step' instead of 'process_decision'
     next_step = get_state_attr(state, "next_workflow_step", "")
     
@@ -82,10 +84,11 @@ def process_router(state: State) -> ProcessNodeType:
     # Safety: prevent infinite loop if manager keeps failing
     step_count = get_state_attr(state, "step_count", 0)
     if step_count > 20:
-        logger.warning(f"Step count ({step_count}) too high with invalid decision '{next_step}'. Forcing FINISH.")
+        logger.debug(f"Step count ({step_count}) too high with invalid decision '{next_step}'. Forcing FINISH.")
+        UI.print_system_info("偵測到流程步數過多，為確保穩定性，系統正在引導進入最終整理階段。")
         return "Refiner"
 
-    logger.warning(f"Invalid decision: {next_step}. Defaulting to 'Process'.")
+    logger.debug(f"Invalid decision: {next_step}. Defaulting to 'Process'.")
     return "Process"
 
-logger.info("Router module initialized")
+logger.debug("Router module initialized")

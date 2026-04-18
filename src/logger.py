@@ -18,7 +18,10 @@ class SilenceFilter(logging.Filter):
             "Discovered",
             "Client does not support MCP Roots",
             "Traceback",
-            "GeneratorExit"
+            "GeneratorExit",
+            "initialized successfully",
+            "tools initialized",
+            "created successfully"
         ]
         return not any(term in msg for term in blacklist)
 
@@ -47,7 +50,7 @@ def setup_logger(log_file:str='agent.log'):
 
     # Console handler (Filtered progress)
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.WARNING)
     console_handler.setFormatter(formatter)
 
     # Add handlers

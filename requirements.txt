@@ -16,3 +16,4 @@ wikipedia==1.4.0
 firecrawl-py==4.5.0
 openai==2.6.0
 mcp>=1.0.0
+questionary==2.1.1
