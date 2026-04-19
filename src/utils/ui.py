@@ -9,6 +9,11 @@ from rich.theme import Theme
 from rich import box
 from prompt_toolkit import PromptSession, HTML
 from prompt_toolkit.styles import Style
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.key_binding import KeyBindings
+import os
 import questionary
 
 # Professional color palette
@@ -31,12 +36,40 @@ AGENT_THEME = Theme({
 
 console = Console(theme=AGENT_THEME, force_terminal=True)
 
+# Persistent history file path
+_HISTORY_FILE = os.path.expanduser("~/.multi_agent_da_history")
+
+# Slash commands available for tab-completion
+_COMMANDS = ["/exit", "/help", "/reset"]
+
 # Claude Code style for the bottom input bar
 _PROMPT_STYLE = Style.from_dict({
     "bottom-toolbar": "bg:#1e1e1e #555555",
     "bottom-toolbar.text": "fg:#00cccc",
     "prompt": "fg:#ffffff bold",
 })
+
+
+def _build_keybindings() -> KeyBindings:
+    """Build custom key bindings: Enter submits, Ctrl-J or Alt-Enter inserts newline.
+
+    Returns:
+        A KeyBindings instance with submission and newline keys configured.
+    """
+    kb = KeyBindings()
+
+    @kb.add("enter")
+    def _(event) -> None:  # noqa: ANN001
+        # Enter submits immediately (overrides multiline default of inserting newline)
+        event.current_buffer.validate_and_handle()
+
+    @kb.add("c-j")
+    @kb.add("escape", "enter")
+    def _(event) -> None:  # noqa: ANN001
+        # Control-J or Alt+Enter inserts a newline
+        event.current_buffer.insert_text("\n")
+
+    return kb
 
 # Style map for agent name → theme key
 _STYLE_MAP = {
@@ -83,8 +116,23 @@ class UI:
 
     @staticmethod
     def initialize() -> None:
+        """Initialize the PromptSession with Claude Code-style UX enhancements.
+
+        Features added:
+            - FileHistory: persistent cross-session input history.
+            - AutoSuggestFromHistory: grey-text inline suggestion.
+            - WordCompleter: Tab-completion for slash commands.
+            - multiline + KeyBindings: Alt+Enter or Ctrl-J for newline, Enter to submit.
+        """
         if UI._session is None:
-            UI._session = PromptSession(style=_PROMPT_STYLE)
+            UI._session = PromptSession(
+                style=_PROMPT_STYLE,
+                history=FileHistory(_HISTORY_FILE),
+                auto_suggest=AutoSuggestFromHistory(),
+                completer=WordCompleter(_COMMANDS, sentence=True),
+                key_bindings=_build_keybindings(),
+                multiline=True,
+            )
 
     @staticmethod
     def release_session() -> None:
