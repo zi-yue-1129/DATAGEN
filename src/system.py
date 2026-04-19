@@ -56,7 +56,7 @@ class MultiAgentSystem:
                 elif kind == "on_chat_model_stream":
                     content = event["data"]["chunk"].content
                     if content:
-                        # Update UI with incremental chunk
+                        # Update UI with incremental chunk via Live
                         UI.print_agent_message(current_node, content, is_stream=True)
 
                 # Handle Final Messages from nodes
@@ -66,26 +66,26 @@ class MultiAgentSystem:
                         last_msg = node_output["messages"][-1]
                         if isinstance(last_msg, AIMessage):
                             agent_name = event["name"]
-                            # End stream if we were streaming for this node
+                            # End the stream and print final pretty Markdown Panel
                             UI.end_stream()
-                            # Optional: Print final collected content if needed for history
-                            # UI.print_agent_message(agent_name, last_msg.content)
+                            UI.print_agent_message(agent_name, last_msg.content)
                         elif isinstance(last_msg, HumanMessage):
                             UI.print_system_info(f"使用者輸入: {last_msg.content}")
 
             UI.update_status("任務完成", agent="系統")
 
         except Exception as e:
+            UI.stop_status()
             UI.print_error(f"工作流執行錯誤: {e}")
             logger.exception("Workflow execution error")
         finally:
-            UI.update_status("就緒", agent="系統")
+            UI.stop_status()
 
 if __name__ == "__main__":
     import asyncio
     system = MultiAgentSystem()
     async def test():
-        user_input = UI.ask_text("Please enter your research topic: ")
+        user_input = await UI.get_input_async("Please enter your research topic: ")
         if user_input:
             await system.run(user_input)
     asyncio.run(test())

@@ -1,18 +1,17 @@
 from __future__ import annotations
 import sys
-import asyncio
-from typing import Any, Optional, List
+from typing import Optional, List, Any
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
 from rich.live import Live
-from rich.spinner import Spinner
 from rich.theme import Theme
 from rich import box
-
+from prompt_toolkit import PromptSession, HTML
+from prompt_toolkit.styles import Style
 import questionary
 
-# Define a professional color palette as requested
+# Professional color palette
 AGENT_THEME = Theme({
     "info": "dim cyan",
     "warning": "bold yellow",
@@ -30,151 +29,282 @@ AGENT_THEME = Theme({
     "human": "bold white on purple",
 })
 
-# Use force_terminal=True to ensure colors work in SSH/VSCode
 console = Console(theme=AGENT_THEME, force_terminal=True)
 
+# Claude Code style for the bottom input bar
+_PROMPT_STYLE = Style.from_dict({
+    "bottom-toolbar": "bg:#1e1e1e #555555",
+    "bottom-toolbar.text": "fg:#00cccc",
+    "prompt": "fg:#ffffff bold",
+})
+
+# Style map for agent name → theme key
+_STYLE_MAP = {
+    "hypothesis": "agent.hypothesis",
+    "note":       "agent.note",
+    "process":    "agent.process",
+    "viz":        "agent.viz",
+    "quality":    "agent.quality",
+    "code":       "agent.code",
+    "search":     "agent.search",
+    "report":     "agent.report",
+    "refiner":    "agent.refiner",
+}
+
+def _get_style(agent_name: str) -> str:
+    """Resolve agent name prefix → theme style key."""
+    if not agent_name:
+        return "info"
+    prefix = agent_name.split("_")[0].lower()
+    return _STYLE_MAP.get(prefix, "info")
+
+
 class UI:
-    """Centralized UI components for the Multi-agent system (Original Style)."""
-    _active_status: Optional[Any] = None
-    
-    @staticmethod
-    def initialize():
-        """No-op for backward compatibility."""
-        pass
+    """
+    Architecture:
+    - Main input   → PromptSession (bottom toolbar, Claude style)
+    - Node menus   → questionary   (arrow-key selectable)
+    - Agent output → Rich Panel    (Markdown rendered)
+    - While gen.   → Rich spinner  (status indicator)
+
+    PromptSession & questionary are NEVER active at the same time,
+    so there is no terminal control conflict.
+    """
+
+    _status: Optional[Any] = None      # rich status context
+    _session: Optional[PromptSession] = None
+    _current_agent: str = "系統"
+    _current_status_msg: str = "就緒"
+    _stream_buffer: str = ""             # accumulated streaming content
+    _stream_agent: str = ""              # agent name for the current stream
+    _live: Optional[Live] = None         # Live renderer for streaming
+
+    # ── Init ────────────────────────────────────────────────────────────────
 
     @staticmethod
-    def print_header(title: str):
-        UI.stop_status()
+    def initialize() -> None:
+        if UI._session is None:
+            UI._session = PromptSession(style=_PROMPT_STYLE)
+
+    @staticmethod
+    def release_session() -> None:
+        """Destroy the PromptSession so questionary can take terminal control."""
+        UI._session = None
+
+    # ── Header ──────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def print_header(title: str) -> None:
         console.print("\n")
         console.print(Panel(
-            f"[bold cyan]{title.upper()}[/bold cyan]", 
-            expand=True, 
+            f"[bold cyan]{title.upper()}[/bold cyan]",
+            expand=True,
             border_style="bold cyan",
             box=box.DOUBLE,
-            padding=(1, 4)
+            padding=(1, 4),
         ))
         console.print("\n")
 
-    @staticmethod
-    def print_agent_message(agent_name: str, content: str, is_stream: bool = False):
-        """Print agent message with Markdown support (Original Style)."""
-        UI.stop_status()
-        
-        # Handle streaming differently in original style
-        if is_stream:
-            # For streaming, we just output raw text to console
-            # Markdown rendering will happen in the final full message
-            console.print(content, end="")
-            return
+    # ── Agent Messages ───────────────────────────────────────────────────────
 
-        prefix = agent_name.split('_')[0].lower()
-        style_key = f"agent.{prefix}"
-        
-        # Check if style exists, otherwise fallback to info
-        try:
-            console.get_style(style_key)
-        except Exception:
-            style_key = "info"
-            
-        md = Markdown(content, code_theme="monokai", inline_code_lexer="python")
-        
-        # Enhanced Panel with rounded corners and padding, no emojis
-        panel = Panel(
-            md,
-            title=f"[bold]{agent_name.upper()}[/bold]",
+    @staticmethod
+    def _make_panel(agent_name: str, content: str) -> Panel:
+        """Build a Markdown Panel for a given agent and content."""
+        style_key = _get_style(agent_name)
+        safe_name = (agent_name or "AGENT").upper()
+        return Panel(
+            Markdown(content),
+            title=f"[bold]{safe_name}[/bold]",
             title_align="left",
             border_style=style_key,
             padding=(1, 2),
-            subtitle=f"[dim]SYSTEM AGENT NODE[/dim]",
-            subtitle_align="right"
+            subtitle="[dim]DataAnalysis Agent Node[/dim]",
+            subtitle_align="right",
+            box=box.ROUNDED,
         )
-        console.print(panel)
 
     @staticmethod
-    def end_stream():
-        """Simply add a newline for original style."""
-        console.print("\n")
+    def _flush_live() -> None:
+        """Stop Live (transient=True erases it) then print one clean Panel."""
+        if UI._live is not None:
+            UI._live.stop()   # erases the transient Live area
+            UI._live = None
+            if UI._stream_buffer.strip():
+                console.print("\n")
+                console.print(UI._make_panel(UI._stream_agent or "AGENT", UI._stream_buffer))
+                console.print("\n")
+        UI._stream_buffer = ""
+        UI._stream_agent = ""
 
     @staticmethod
-    def print_system_info(message: str):
+    def print_agent_message(
+        agent_name: str, content: str, is_stream: bool = False
+    ) -> None:
+        """
+        is_stream=True  → Real-time Markdown rendering via rich.live.Live
+                          (auto_refresh=False, manual refresh per chunk)
+        is_stream=False → Flush any live stream, then render static Panel
+        """
+        safe_name = agent_name or "AGENT"
+        UI._stream_agent = safe_name
+
+        if is_stream:
+            UI.stop_status()  # stop spinner — Live takes over
+            UI._stream_buffer += content
+
+            panel = UI._make_panel(safe_name, UI._stream_buffer)
+
+            if UI._live is None:
+                # transient=True: Live erases itself when stopped,
+                # so _flush_live() can print one clean final Panel
+                UI._live = Live(
+                    panel,
+                    console=console,
+                    auto_refresh=False,
+                    vertical_overflow="ellipsis",
+                    transient=True,
+                )
+                UI._live.start()
+            else:
+                UI._live.update(panel)
+
+            # Manual refresh — no background thread, no conflicts
+            UI._live.refresh()
+            return
+
+        # Non-stream: flush any live rendering, then print a static panel
+        UI._flush_live()
+        if content.strip():
+            console.print("\n")
+            console.print(UI._make_panel(safe_name, content))
+            console.print("\n")
+
+    @staticmethod
+    def end_stream() -> None:
+        """Stop Live and commit the final Markdown Panel."""
+        UI._flush_live()
+
+    # ── Spinner / Status ─────────────────────────────────────────────────────
+
+    @staticmethod
+    def show_spinner(message: str) -> None:
+        # Skip if Live stream is already active (two Lives cannot coexist)
+        if UI._live is not None:
+            return
+        UI.stop_status()
+        UI._current_status_msg = message
+        UI._status = console.status(f"[info]{message}[/info]", spinner="dots")
+        UI._status.start()
+
+    @staticmethod
+    def update_status(message: str, agent: Optional[str] = None) -> None:
+        UI._current_status_msg = message
+        if agent:
+            UI._current_agent = agent
+        # Skip spinner management if Live is already rendering
+        if UI._live is not None:
+            return
+        if UI._status is None:
+            UI.show_spinner(message)
+        else:
+            UI._status.update(f"[info]{message}[/info]")
+
+    @staticmethod
+    def stop_status() -> None:
+        if UI._status is not None:
+            UI._status.stop()
+            UI._status = None
+
+    # ── Info Prints ──────────────────────────────────────────────────────────
+
+    @staticmethod
+    def print_system_info(message: str) -> None:
         UI.stop_status()
         console.print(f"[info]ℹ {message}[/info]")
 
     @staticmethod
-    def print_warning(message: str):
+    def print_warning(message: str) -> None:
         UI.stop_status()
         console.print(f"[warning]⚠ {message}[/warning]")
 
     @staticmethod
-    def print_error(message: str):
+    def print_error(message: str) -> None:
         UI.stop_status()
         console.print(f"[error]✘ {message}[/error]")
 
+    # ── Input (PromptSession — main loop only) ───────────────────────────────
+
     @staticmethod
-    async def get_input_async(prompt: str = ">>> ") -> str:
-        """Async input using questionary to maintain the original look."""
+    async def get_input_async(prompt: str = "> ") -> str:
+        """
+        Claude Code style bottom input with persistent toolbar.
+        Called ONLY from the main async loop (never from node threads).
+        """
         UI.stop_status()
+        UI.initialize()
+
+        def _toolbar():
+            return HTML(
+                f'<style bg="#1e1e1e" fg="#00cccc"> ⬡ Agent: {UI._current_agent} </style>'
+                f'<style bg="#1e1e1e" fg="#888888"> │ {UI._current_status_msg} </style>'
+            )
+
         try:
-            result = await questionary.text(prompt).ask_async()
+            result = await UI._session.prompt_async(
+                HTML(f"<b>{prompt}</b>"),
+                bottom_toolbar=_toolbar,
+                refresh_interval=0.5,
+            )
             return (result or "").strip()
         except (EOFError, KeyboardInterrupt):
             return "/exit"
 
+    # ── Menus (questionary — node threads) ──────────────────────────────────
+
     @staticmethod
-    def ask_choice(message: str, choices: list[str]) -> str:
-        """Sync choice prompt using questionary."""
+    def ask_choice(message: str, choices: List[str]) -> str:
+        """Arrow-key selectable menu. Flushes Live stream first."""
+        UI._flush_live()   # commit streamed panel before taking terminal
         UI.stop_status()
         res = questionary.select(message, choices=choices).ask()
         return res if res else "/exit"
 
     @staticmethod
-    async def ask_choice_async(message: str, choices: list[str]) -> str:
-        """Async choice prompt using questionary."""
+    async def ask_choice_async(message: str, choices: List[str]) -> str:
+        UI._flush_live()
         UI.stop_status()
         res = await questionary.select(message, choices=choices).ask_async()
         return res if res else "/exit"
 
     @staticmethod
     def ask_text(message: str, default: str = "") -> str:
+        """Single-line text input. Flushes Live stream first."""
+        UI._flush_live()
         UI.stop_status()
-        return questionary.text(message, default=default).ask()
+        res = questionary.text(message, default=default).ask()
+        return (res or default).strip()
 
     @staticmethod
-    def show_spinner(message: str):
+    async def ask_text_async(message: str, default: str = "") -> str:
+        UI._flush_live()
         UI.stop_status()
-        UI._active_status = console.status(f"[info]{message}[/info]", spinner="dots")
-        UI._active_status.start()
-        return UI._active_status
+        res = await questionary.text(message, default=default).ask_async()
+        return (res or default).strip()
 
-    @staticmethod
-    def stop_status():
-        if UI._active_status:
-            try:
-                UI._active_status.stop()
-                UI._active_status = None
-            except Exception:
-                pass
 
-    @staticmethod
-    def update_status(message: str, agent: Optional[str] = None):
-        """Update existing spinner or create new one."""
-        if not UI._active_status:
-            UI.show_spinner(message)
-        else:
-            UI._active_status.update(f"[info]{message}[/info]")
+
+# ── Intervention Menu ────────────────────────────────────────────────────────
 
 def get_intervention_menu() -> str:
-    """Display the intervention menu and return the user's choice."""
+    """Pause menu — arrow-key selectable."""
     UI.stop_status()
     console.print("\n[human] ⏸ 工作流已暫停 [/human]")
-    # Use sync ask because it's usually called from nodes
     res = questionary.select(
         "您想要做什麼？",
         choices=[
             "繼續執行 (Continue)",
             "提供額外指令 (Add Instructions)",
-            "查看當前狀態 (View State)",
-            "結束研究 (Exit)"
-        ]
+            "結束研究 (Exit)",
+        ],
     ).ask()
     return res if res else "結束研究 (Exit)"
