@@ -184,15 +184,18 @@ def human_choice_node(state: State) -> dict[str, Any]:
     """Handle human input to choose the next step."""
     choice_map = {
         "重新生成假設 (Regenerate hypothesis)": "1",
-        "繼續研究流程 (Continue research process)": "2"
+        "繼續研究流程 (Continue research process)": "2",
+        "/exit": "exit"
     }
     
-    choice_text = UI.ask_choice("請選擇下一步：", list(choice_map.keys()))
-    if not choice_text:
-        # Default fallback if user cancels (Esc)
-        choice = "2"
-    else:
-        choice = choice_map[choice_text]
+    choice_text = UI.ask_choice("請選擇下一步：", [k for k in choice_map.keys() if k != "/exit"])
+    
+    # Handle cancellation or explicit exit
+    if not choice_text or choice_text == "/exit":
+        UI.print_system_info("收到退出指令。")
+        raise SystemExit("User requested exit via /exit")
+    
+    choice = choice_map.get(choice_text, "2")
     
     current_messages = list(get_state_attr(state, "messages", []))
     updates = {

@@ -123,6 +123,8 @@ class UI:
             - AutoSuggestFromHistory: grey-text inline suggestion.
             - WordCompleter: Tab-completion for slash commands.
             - multiline + KeyBindings: Alt+Enter or Ctrl-J for newline, Enter to submit.
+
+        Note: Terminal UI does not natively render LaTeX math blocks; they will appear as raw text.
         """
         if UI._session is None:
             UI._session = PromptSession(
@@ -173,14 +175,14 @@ class UI:
 
     @staticmethod
     def _flush_live() -> None:
-        """Stop Live (transient=True erases it) then print one clean Panel."""
+        """Stop Live — final frame stays on screen, no erase/reprint cycle."""
         if UI._live is not None:
-            UI._live.stop()   # erases the transient Live area
+            try:
+                UI._live.refresh()
+            except Exception:
+                pass
+            UI._live.stop()
             UI._live = None
-            if UI._stream_buffer.strip():
-                console.print("\n")
-                console.print(UI._make_panel(UI._stream_agent or "AGENT", UI._stream_buffer))
-                console.print("\n")
         UI._stream_buffer = ""
         UI._stream_agent = ""
 
@@ -190,42 +192,47 @@ class UI:
     ) -> None:
         """
         is_stream=True  → Real-time Markdown rendering via rich.live.Live
-                          (auto_refresh=False, manual refresh per chunk)
         is_stream=False → Flush any live stream, then render static Panel
         """
         safe_name = agent_name or "AGENT"
-        UI._stream_agent = safe_name
 
         if is_stream:
-            UI.stop_status()  # stop spinner — Live takes over
-            UI._stream_buffer += content
+            # Name Stability: prioritize specific names over generic "AGENT"
+            if safe_name == "AGENT" and UI._stream_agent and UI._stream_agent != "AGENT":
+                safe_name = UI._stream_agent
 
+            # If agent changed, flush current stream
+            if UI._live is not None and UI._stream_agent and UI._stream_agent != safe_name:
+                UI._flush_live()
+
+            UI._stream_agent = safe_name
+            UI.stop_status()
+
+            if not content:
+                return
+
+            UI._stream_buffer += content
             panel = UI._make_panel(safe_name, UI._stream_buffer)
 
             if UI._live is None:
-                # transient=True: Live erases itself when stopped,
-                # so _flush_live() can print one clean final Panel
                 UI._live = Live(
                     panel,
                     console=console,
                     auto_refresh=False,
-                    vertical_overflow="ellipsis",
-                    transient=True,
+                    vertical_overflow="visible",
                 )
                 UI._live.start()
             else:
                 UI._live.update(panel)
-
-            # Manual refresh — no background thread, no conflicts
             UI._live.refresh()
             return
 
-        # Non-stream: flush any live rendering, then print a static panel
+        # Static output
+        UI.stop_status()
         UI._flush_live()
+
         if content.strip():
-            console.print("\n")
             console.print(UI._make_panel(safe_name, content))
-            console.print("\n")
 
     @staticmethod
     def end_stream() -> None:
@@ -288,6 +295,7 @@ class UI:
         Claude Code style bottom input with persistent toolbar.
         Called ONLY from the main async loop (never from node threads).
         """
+        UI._flush_live()  # Ensure any active stream is committed and Live stopped
         UI.stop_status()
         UI.initialize()
 

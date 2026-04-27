@@ -31,6 +31,7 @@ class MultiAgentSystem:
         
         try:
             current_node = None
+            streamed_in_current_node = False
             
             # We use astream_events to capture both node transitions and chat model streaming
             async for event in graph.astream_events(
@@ -50,12 +51,14 @@ class MultiAgentSystem:
                 elif kind == "on_node_start":
                     node_name = event["name"]
                     current_node = node_name
+                    streamed_in_current_node = False  # Reset for each node
                     UI.update_status(f"正在執行: [bold]{node_name}[/bold] ...", agent=node_name)
                 
                 # Handle Chat Model Streaming
                 elif kind == "on_chat_model_stream":
                     content = event["data"]["chunk"].content
                     if content:
+                        streamed_in_current_node = True
                         # Update UI with incremental chunk via Live
                         UI.print_agent_message(current_node, content, is_stream=True)
 
@@ -65,10 +68,8 @@ class MultiAgentSystem:
                     if node_output and "messages" in node_output:
                         last_msg = node_output["messages"][-1]
                         if isinstance(last_msg, AIMessage):
-                            agent_name = event["name"]
-                            # End the stream and print final pretty Markdown Panel
-                            UI.end_stream()
-                            UI.print_agent_message(agent_name, last_msg.content)
+                            if streamed_in_current_node:
+                                UI.end_stream()
                         elif isinstance(last_msg, HumanMessage):
                             UI.print_system_info(f"使用者輸入: {last_msg.content}")
 
@@ -79,6 +80,7 @@ class MultiAgentSystem:
             UI.print_error(f"工作流執行錯誤: {e}")
             logger.exception("Workflow execution error")
         finally:
+            UI.end_stream()
             UI.stop_status()
 
 if __name__ == "__main__":
