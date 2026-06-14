@@ -1,5 +1,7 @@
 from langchain_core.tools import tool
 from langchain_community.document_loaders import WebBaseLoader, FireCrawlLoader
+# fastCRW (Firecrawl-compatible web scraper; single binary, self-host or cloud)
+from langchain_crw import CrwLoader
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -7,7 +9,7 @@ from typing import Annotated, List
 from bs4 import BeautifulSoup
 
 from ..logger import setup_logger
-from ..config import FIRECRAWL_API_KEY,CHROMEDRIVER_PATH
+from ..config import FIRECRAWL_API_KEY,CRW_API_KEY,CRW_API_URL,CHROMEDRIVER_PATH
 # Set up logger
 logger = setup_logger()
 
@@ -105,11 +107,49 @@ def _firecrawl_scrape_webpages(urls: Annotated[List[str], "List of URLs to scrap
     except Exception as e:
         logger.error(f"Error during FireCrawl scraping: {str(e)}")
         raise  # Re-raise the exception to be caught by the calling function
+def _crw_scrape_webpages(urls: Annotated[List[str], "List of URLs to scrape"]) -> Annotated[str, "The scraped content from fastCRW."]:
+    """
+    Scrape the provided web pages for detailed information using fastCRW.
+
+    fastCRW is a Firecrawl-compatible web scraper (single binary; self-host or cloud).
+    This function uses the CrwLoader to load and scrape the content of the provided URLs.
+
+    """
+    try:
+        logger.info(f"Scraping webpages using fastCRW: {urls}")
+        results = []
+        for url in urls:
+            loader = CrwLoader(
+                api_key=CRW_API_KEY,
+                api_url=CRW_API_URL,
+                url=url,
+                mode="scrape"
+            )
+            res = loader.load()
+            # Normalize different possible return types from the loader
+            if isinstance(res, list):
+                for doc in res:
+                    if hasattr(doc, "page_content"):
+                        results.append(str(doc.page_content))
+                    else:
+                        results.append(str(doc))
+            else:
+                results.append(str(res))
+        aggregated = "\n\n".join(results)
+        logger.info("fastCRW scraping completed successfully")
+        return aggregated
+    except Exception as e:
+        logger.error(f"Error during fastCRW scraping: {str(e)}")
+        raise  # Re-raise the exception to be caught by the calling function
 @tool
-def scrape_webpages(urls: Annotated[List[str], "List of URLs to scrape"]) -> Annotated[str, "The scraped content from either FireCrawl or WebBaseLoader."]:
+def scrape_webpages(urls: Annotated[List[str], "List of URLs to scrape"]) -> Annotated[str, "The scraped content from fastCRW, FireCrawl or WebBaseLoader."]:
     """
-    Attempt to scrape webpages using FireCrawl, falling back to WebBaseLoader if unsuccessful.
+    Attempt to scrape webpages using fastCRW, falling back to FireCrawl then WebBaseLoader if unsuccessful.
     """
+    try:
+        return _crw_scrape_webpages(urls)
+    except Exception as e:
+        logger.warning(f"fastCRW scraping failed: {str(e)}. Falling back to FireCrawl.")
     try:
         return _firecrawl_scrape_webpages(urls)
     except Exception as e:

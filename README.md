@@ -101,6 +101,12 @@ CHROMEDRIVER_PATH = ./chromedriver-linux64/chromedriver
 # Note: If this key is missing, query capabilities may be reduced
 FIRECRAWL_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
+# fastCRW (Firecrawl-compatible web scraper; single binary, self-host or cloud) (optional)
+# API key for the managed cloud; optional for self-host
+CRW_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+# Defaults to the managed cloud; override for self-host (e.g. http://localhost:3000)
+CRW_API_URL = https://fastcrw.com/api
+
 # OpenAI API key (optional)
 OPENAI_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 # Anthropic API key (optional)
