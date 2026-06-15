@@ -8,6 +8,10 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 LANGCHAIN_API_KEY = os.getenv('LANGCHAIN_API_KEY')
 FIRECRAWL_API_KEY = os.getenv('FIRECRAWL_API_KEY')
+# fastCRW (Firecrawl-compatible web scraper; single binary, self-host or cloud)
+CRW_API_KEY = os.getenv('CRW_API_KEY')
+# Default to managed cloud; override CRW_API_URL for self-host (e.g. http://localhost:3000)
+CRW_API_URL = os.getenv('CRW_API_URL', 'https://fastcrw.com/api')
 # Get working directory from environment variable
 WORKING_DIRECTORY = os.getenv('WORKING_DIRECTORY', './data')
 # Get Conda-related paths from environment variables
