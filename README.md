@@ -226,6 +226,7 @@ DATAGEN implements a powerful **Progressive Disclosure** architecture for agent 
 - Ensure you have sufficient API credits, as the system will make multiple API calls.
 - The system may take some time to complete the entire research process, depending on the complexity of the task.
 - **WARNING**: The agent system may modify the data being analyzed. It is highly recommended to backup your data before using this system.
+- DATAGEN does not ship or train on project-provided training datasets. Users provide their own analysis data at runtime through `WORKING_DIRECTORY`.
 
 ## Current Issues and Solutions
 1. NoteTaker Efficiency Improvement

@@ -72,10 +72,7 @@ def process_router(state: State) -> ProcessNodeType:
     next_step = get_state_attr(state, "next_workflow_step", "")
     
     valid_decisions = {"Coder", "Search", "Visualization", "Report"}
-    
-    if next_step in valid_decisions:
-        return cast(ProcessNodeType, next_step)
-    
+
     if next_step == "FINISH":
         return "Refiner"
     
@@ -84,6 +81,9 @@ def process_router(state: State) -> ProcessNodeType:
     if step_count > 20:
         logger.warning(f"Step count ({step_count}) too high with invalid decision '{next_step}'. Forcing FINISH.")
         return "Refiner"
+
+    if next_step in valid_decisions:
+        return cast(ProcessNodeType, next_step)
 
     logger.warning(f"Invalid decision: {next_step}. Defaulting to 'Process'.")
     return "Process"
