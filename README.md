@@ -242,7 +242,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=starpig1129/DATAGEN&type=Date)](https://star-history.com/#starpig1129/DATAGEN&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=zi-yue-1129/DATAGEN&type=Date)](https://star-history.dera.page/#zi-yue-1129/DATAGEN&type=Date)
 
 ## Other Projects
 Here are some of my other notable projects:
