@@ -246,10 +246,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Other Projects
 Here are some of my other notable projects:
+
 ### PheroPath
 PheroPath is a filesystem-based stigmergy communication protocol that allows agents and humans to leave invisible "pheromones" (signals) on files. It enables communicating context, risks (DANGER), or status (TODO, SAFE) without modifying the file content itself, facilitating better multi-agent collaboration.
-- GitHub: [PheroPath](https://github.com/starpig1129/PheroPath)
-### PigPig: Advanced Multi-modal LLM Discord Bot: 
-A powerful Discord bot based on multi-modal Large Language Models (LLM), designed to interact with users through natural language. 
-It combines advanced AI capabilities with practical features, offering a rich experience for Discord communities.
-- GitHub: [ai-discord-bot-PigPig](https://github.com/starpig1129/ai-discord-bot-PigPig)
+- GitHub: [PheroPath](https://github.com/zi-yue-1129/PheroPath)
+
+### PigPig: Advanced Multi-modal LLM Discord Bot
+A powerful Discord bot based on multi-modal Large Language Models (LLM), designed to interact with users through natural language. It combines advanced AI capabilities with practical features, offering a rich experience for Discord communities.
+- GitHub: [ai-discord-bot-PigPig](https://github.com/zi-yue-1129/ai-discord-bot-PigPig)
+
+### research-lab-skills
+Composable Agent Skills covering the complete research lifecycle: literature review, research logs, experiment tracking, analysis, lab presentations, manuscript writing, and peer review.
+- GitHub: [research-lab-skills](https://github.com/zi-yue-1129/research-lab-skills)
