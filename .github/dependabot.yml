@@ -15,6 +15,15 @@ updates:
       # src/core/mcp_manager.py; upgrade together with that migration.
       - dependency-name: "mcp"
         update-types: ["version-update:semver-major"]
+      # pandas 3.x requires Python >= 3.11; drop this rule together with
+      # Python 3.10 support (pyproject.toml, CI matrix).
+      - dependency-name: "pandas"
+        update-types: ["version-update:semver-major"]
+      # arxiv 4.x removed Search.results(), which langchain_community's
+      # ArxivAPIWrapper (0.4.2) still calls, so load_tools(["arxiv"]) fails
+      # at call time; drop this rule once the wrapper uses arxiv.Client.
+      - dependency-name: "arxiv"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
