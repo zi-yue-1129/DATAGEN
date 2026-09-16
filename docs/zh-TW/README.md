@@ -180,24 +180,23 @@ agents:
   hypothesis_agent:
     provider: openai
     model_config:
-      model: gpt-5-nano
+      model: gpt-5.4-nano
       temperature: 1.0
   note_agent:
     provider: google
     model_config:
-      model: gemini-2.5-pro
-      temperature: 1.0
+      model: gemini-3.1-pro-preview
   code_agent:
     provider: anthropic
     model_config:
-      model: claude-haiku-4-5
-      temperature: 1.0
+      model: claude-sonnet-5
 ```
 
 - **provider**：指定要使用的語言模型提供者（例如 openai、google、anthropic、ollama、groq、atlascloud、orcarouter）
 - **model_config**：包含模型特定的配置參數
   - `model`：要使用的特定模型名稱
-  - `temperature`：控制模型輸出的隨機性（範圍：0.0-2.0）
+  - `temperature`：控制模型輸出的隨機性（範圍：0.0-2.0）。不接受此參數的模型請省略：
+    Gemini 3.x 會忽略它，Claude Sonnet 5 則會拒絕預設值以外的任何值。
 
 `atlascloud` 提供者會讀取 `ATLASCLOUD_API_KEY`，並使用 Atlas Cloud 的 OpenAI 相容端點。請從當前 Atlas Cloud 模型目錄選擇模型，例如：
 

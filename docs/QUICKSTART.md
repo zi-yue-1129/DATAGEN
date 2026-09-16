@@ -61,9 +61,11 @@ agents:
   code_agent:
     provider: anthropic      # openai, google, anthropic, ollama, orcarouter
     model_config:
-      model: claude-sonnet-4-20250514
-      temperature: 0.7
+      model: claude-sonnet-5
 ```
+
+Add `temperature: 0.7` only for models that accept it — Gemini 3.x ignores it, and Claude
+Sonnet 5 rejects any value other than its default.
 
 Supported providers:
 - `openai` - GPT series
