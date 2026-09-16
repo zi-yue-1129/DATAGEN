@@ -61,9 +61,11 @@ agents:
   code_agent:
     provider: anthropic      # openai, google, anthropic, ollama
     model_config:
-      model: claude-sonnet-4-20250514
-      temperature: 0.7
+      model: claude-sonnet-5
 ```
+
+只有在模型接受 `temperature` 時才加上 `temperature: 0.7`：Gemini 3.x 會忽略它，
+Claude Sonnet 5 則會拒絕預設值以外的任何值。
 
 支援的 Provider：
 - `openai` - GPT 系列

@@ -184,24 +184,24 @@ agents:
   hypothesis_agent:
     provider: openai
     model_config:
-      model: gpt-5-nano
+      model: gpt-5.6-luna
       temperature: 1.0
   note_agent:
     provider: google
     model_config:
-      model: gemini-2.5-pro
-      temperature: 1.0
+      model: gemini-3.1-pro-preview
   code_agent:
     provider: anthropic
     model_config:
-      model: claude-haiku-4-5
-      temperature: 1.0
+      model: claude-sonnet-5
 ```
 
 - **provider**: Specifies the language model provider to use (e.g., openai, google, anthropic, ollama, groq, atlascloud, orcarouter)
 - **model_config**: Contains model-specific configuration parameters
   - `model`: The specific model name to use
-  - `temperature`: Controls the randomness of model output (range: 0.0-2.0)
+  - `temperature`: Controls the randomness of model output (range: 0.0-2.0). Omit it for
+    models that do not accept it: Gemini 3.x ignores it, and Claude Sonnet 5 rejects any
+    value other than its default.
 
 The `atlascloud` provider reads `ATLASCLOUD_API_KEY` and uses Atlas Cloud's OpenAI-compatible endpoint. Choose a model from the current Atlas Cloud model catalog, for example:
 
