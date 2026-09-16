@@ -180,7 +180,7 @@ agents:
   hypothesis_agent:
     provider: openai
     model_config:
-      model: gpt-5.4-nano
+      model: gpt-5.6-luna
       temperature: 1.0
   note_agent:
     provider: google
