@@ -1,0 +1,18 @@
+{
+  "_comment": "DATAGEN tool contract for tracelint. DATAGEN tools catch exceptions and RETURN an 'Error: ...' string rather than raising, so a captured span carries no structured error status. The failure_when predicate below is what lets tracelint treat those strings as failures. See tools.no_contract.json for the same contract without failure_when.",
+
+  "tools": {
+    "google_search":   { "metadata": { "side_effecting": false, "failure_when": { "pointer": "", "matches": "^Error" } } },
+    "scrape_webpages": { "metadata": { "side_effecting": false, "failure_when": { "pointer": "", "matches": "^Error" } } },
+    "wikipedia":       { "metadata": { "side_effecting": false, "failure_when": { "pointer": "", "matches": "^Error" } } },
+    "arxiv":           { "metadata": { "side_effecting": false, "failure_when": { "pointer": "", "matches": "^Error" } } },
+    "collect_data":    { "metadata": { "side_effecting": false, "failure_when": { "pointer": "", "matches": "^Error" } } },
+    "read_document":   { "metadata": { "side_effecting": false, "failure_when": { "pointer": "", "matches": "^Error" } } },
+    "list_directory":  { "metadata": { "side_effecting": false, "failure_when": { "pointer": "", "matches": "^Error" } } },
+
+    "create_document": { "metadata": { "side_effecting": true, "idempotent": true,  "failure_when": { "pointer": "", "matches": "^Error" } } },
+    "edit_document":   { "metadata": { "side_effecting": true, "idempotent": false, "failure_when": { "pointer": "", "matches": "^Error" } } },
+    "execute_code":    { "metadata": { "side_effecting": true, "idempotent": false, "failure_when": { "pointer": "", "matches": "^Error" } } },
+    "execute_command": { "metadata": { "side_effecting": true, "idempotent": false, "failure_when": { "pointer": "", "matches": "^Error" } } }
+  }
+}

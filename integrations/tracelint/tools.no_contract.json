@@ -1,0 +1,18 @@
+{
+  "_comment": "The same DATAGEN contract as tools.json but WITHOUT any failure_when predicate. Because DATAGEN tools return 'Error: ...' strings (no raised exception, no error status), tracelint cannot prove a failure here — errored results are structurally UNKNOWN — so it stays conservative: only review-only candidates, no CI-failing defect. Compare against tools.json to see what declaring failure_when buys.",
+
+  "tools": {
+    "google_search":   { "metadata": { "side_effecting": false } },
+    "scrape_webpages": { "metadata": { "side_effecting": false } },
+    "wikipedia":       { "metadata": { "side_effecting": false } },
+    "arxiv":           { "metadata": { "side_effecting": false } },
+    "collect_data":    { "metadata": { "side_effecting": false } },
+    "read_document":   { "metadata": { "side_effecting": false } },
+    "list_directory":  { "metadata": { "side_effecting": false } },
+
+    "create_document": { "metadata": { "side_effecting": true, "idempotent": true } },
+    "edit_document":   { "metadata": { "side_effecting": true, "idempotent": false } },
+    "execute_code":    { "metadata": { "side_effecting": true, "idempotent": false } },
+    "execute_command": { "metadata": { "side_effecting": true, "idempotent": false } }
+  }
+}
