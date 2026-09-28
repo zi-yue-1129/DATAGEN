@@ -23,6 +23,10 @@ ProcessNodeType = Literal[
     "Coder", "Search", "Visualization", "Report", "Process", "Refiner"
 ]
 
+# Once step_count (agent_node runs, failed ones included) exceeds this, Process
+# routes to Refiner and QualityReview stops sending work back for revision.
+MAX_STEPS = 20
+
 
 def get_state_attr(state: State | dict[str, Any], key: str, default: Any = None) -> Any:
     """Helper to safely get attributes from State whether it's Pydantic or dict."""
@@ -64,6 +68,15 @@ def QualityReview_router(state: State) -> str:
             )
             return "NoteTaker"
 
+        # A failed review leaves revision_count unchanged, so the step limit
+        # also ends a revision loop whose reviewer keeps failing.
+        step_count = get_state_attr(state, "step_count", 0)
+        if step_count > MAX_STEPS:
+            logger.warning(
+                f"Step count ({step_count}) too high during revision. Forcing progression to NoteTaker."
+            )
+            return "NoteTaker"
+
         previous_node = messages[-2].name if len(messages) >= 2 else "NoteTaker"
         revision_routes = {
             "visualization_agent": "Visualization",
@@ -94,7 +107,7 @@ def process_router(state: State) -> ProcessNodeType:
 
     # Safety: prevent infinite loop if manager keeps failing
     step_count = get_state_attr(state, "step_count", 0)
-    if step_count > 20:
+    if step_count > MAX_STEPS:
         logger.warning(
             f"Step count ({step_count}) too high with invalid decision '{next_step}'. Forcing FINISH."
         )

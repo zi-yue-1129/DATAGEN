@@ -178,6 +178,9 @@ def agent_node(state: State, agent: BaseAgent, name: str) -> dict[str, Any]:
             "messages": current_messages
             + [AIMessage(content=f"Error: {str(e)}", name=name)],
             "last_active_agent": name,
+            # A failed run is still a step, so the step limit also ends a loop
+            # whose agent keeps failing.
+            "step_count": get_state_attr(state, "step_count", 0) + 1,
         }
 
 
