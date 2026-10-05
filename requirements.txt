@@ -1,8 +1,8 @@
-langchain==1.4.2
-langchain-core==1.6.5
+langchain==1.4.3
+langchain-core==1.6.6
 langchain-community==0.4.2
-langchain-openai==1.6.6
-langchain-anthropic==1.7.4
+langchain-openai==1.6.7
+langchain-anthropic==1.7.5
 langchain-google-genai==4.4.0
 langchain-ollama==1.1.0
 langchain-groq==1.1.3
