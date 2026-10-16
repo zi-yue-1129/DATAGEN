@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 from .anthropic import AnthropicProvider
 from .atlascloud import AtlasCloudProvider
 from .azure import AzureChatOpenAIProvider
+from .cheaperinference import CheaperInferenceProvider
 from .google import GoogleProvider
 from .groq import ChatGroqProvider
 from .ollama import OllamaProvider
@@ -48,6 +49,8 @@ class ProviderFactory:
             return AtlasCloudProvider()
         elif provider_name == "orcarouter":
             return OrcaRouterProvider()
+        elif provider_name == "cheaperinference":
+            return CheaperInferenceProvider()
         else:
             raise NotImplementedError(
                 f"Provider creation for '{provider_name}' is not implemented."
