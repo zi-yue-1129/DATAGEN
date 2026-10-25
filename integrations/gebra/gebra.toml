@@ -1,0 +1,10 @@
+# Loop bounds for tests/test_gebra_loop_bounds.py. gebra records these
+# declarations and trusts them; it does not check them against the node or
+# router code.
+schema = "gebra-sidecar-v1"
+
+[nodes.Process]
+variant = { key = "step_count", measure = "21 - step_count: every agent_node run adds 1 to step_count, failed runs included, and process_router sends Process to Refiner once step_count > 20. This bounds the Process self-loop and the Process -> worker -> QualityReview -> NoteTaker laps. The Refiner -> HumanReview -> Process lap also passes through Process, but a 'no' at HumanReview ends it, not this count." }
+
+[nodes.QualityReview]
+variant = { key = "step_count", measure = "21 - step_count: the worker and QualityReview each add 1 per revision round, failed runs included, and QualityReview_router sends a revision request to NoteTaker once step_count > 20 (or once revision_count > 3)." }
