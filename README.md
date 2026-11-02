@@ -117,6 +117,8 @@ GOOGLE_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ATLASCLOUD_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 # OrcaRouter API key (optional; for the orcarouter provider)
 ORCAROUTER_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+# Runcrate API key (optional; for the runcrate provider)
+RUNCRATE_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 # LangChain API key (optional)
 # Used for monitoring the processing
@@ -196,7 +198,7 @@ agents:
       model: claude-sonnet-5
 ```
 
-- **provider**: Specifies the language model provider to use (e.g., openai, google, anthropic, ollama, groq, atlascloud, orcarouter)
+- **provider**: Specifies the language model provider to use (e.g., openai, google, anthropic, ollama, groq, atlascloud, orcarouter, runcrate)
 - **model_config**: Contains model-specific configuration parameters
   - `model`: The specific model name to use
   - `temperature`: Controls the randomness of model output (range: 0.0-2.0). Omit it for
@@ -211,6 +213,15 @@ The `atlascloud` provider reads `ATLASCLOUD_API_KEY` and uses Atlas Cloud's Open
     model_config:
       model: openai/gpt-5.4
       temperature: 1.0
+```
+
+The `runcrate` provider reads `RUNCRATE_API_KEY` and uses Runcrate's OpenAI-compatible endpoint for open-weight models. Choose a model from the [Runcrate model catalog](https://runcrate.ai/inference), for example:
+
+```yaml
+  report_agent:
+    provider: runcrate
+    model_config:
+      model: deepseek-ai/DeepSeek-V4.1-Flash
 ```
 
 ## Advanced Configuration System
