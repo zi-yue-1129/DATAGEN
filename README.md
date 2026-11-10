@@ -117,6 +117,8 @@ GOOGLE_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ATLASCLOUD_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 # OrcaRouter API key (optional; for the orcarouter provider)
 ORCAROUTER_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+# Cheaper Inference API key (optional)
+CHEAPER_INFERENCE_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 # LangChain API key (optional)
 # Used for monitoring the processing
@@ -196,7 +198,7 @@ agents:
       model: claude-sonnet-5
 ```
 
-- **provider**: Specifies the language model provider to use (e.g., openai, google, anthropic, ollama, groq, atlascloud, orcarouter)
+- **provider**: Specifies the language model provider to use (e.g., openai, google, anthropic, ollama, groq, atlascloud, orcarouter, cheaperinference)
 - **model_config**: Contains model-specific configuration parameters
   - `model`: The specific model name to use
   - `temperature`: Controls the randomness of model output (range: 0.0-2.0). Omit it for
@@ -210,6 +212,16 @@ The `atlascloud` provider reads `ATLASCLOUD_API_KEY` and uses Atlas Cloud's Open
     provider: atlascloud
     model_config:
       model: openai/gpt-5.4
+      temperature: 1.0
+```
+
+The `cheaperinference` provider reads `CHEAPER_INFERENCE_API_KEY` and uses Cheaper Inference's OpenAI-compatible endpoint. Choose a model from the current Cheaper Inference model catalog, for example:
+
+```yaml
+  report_agent:
+    provider: cheaperinference
+    model_config:
+      model: gpt-5.4-mini
       temperature: 1.0
 ```
 
