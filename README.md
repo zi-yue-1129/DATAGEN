@@ -131,6 +131,21 @@ TAVILY_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 GITHUB_TOKEN = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
+### Optional Monid webpage extraction
+
+Monid provides TinyFish browser extraction with one API key, pay per call.
+Set `MONID_API_KEY` before starting DATAGEN, then add `monid` to the `tools`
+list in your agent configuration (for example,
+`config_local/agents/search_agent/config.yaml` when using `CONFIG_DIRECTORY=config_local`).
+The tool accepts `urls`, a list of absolute webpage URLs, and returns extracted
+text. It reports API, provider, and extraction failures as `Error: ...` results.
+Each page can poll for up to 300 seconds; browser extraction may differ from
+fastCRW or Firecrawl output. Existing tools and scraping fallbacks are unchanged.
+Without the key, `monid` is not registered.
+
+[Monid documentation](https://docs.monid.ai?utm_source=github&utm_medium=oss-pr&utm_campaign=zi-yue-1129-datagen)
+· [Get an API key](https://monid.ai?utm_source=github&utm_medium=oss-pr&utm_campaign=zi-yue-1129-datagen&aid=OSS-PR)
+
 ## Usage
 
 ### Using Python Script

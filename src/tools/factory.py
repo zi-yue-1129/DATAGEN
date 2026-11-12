@@ -1,3 +1,4 @@
+import os
 from typing import Any
 
 from langchain.tools import BaseTool
@@ -44,6 +45,13 @@ class ToolFactory:
         "wikipedia": wikipedia,
         "arxiv": arxiv,
     }
+
+    if os.getenv("MONID_API_KEY"):
+        from langchain_core.tools import tool
+
+        from .monid import monid
+
+        _registry["monid"] = tool(monid)
 
     @classmethod
     def get_tool(cls, tool_name: str) -> BaseTool | None:
