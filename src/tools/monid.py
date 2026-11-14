@@ -72,12 +72,19 @@ def _extract_page(url: str, headers: dict) -> str:
 
 
 def monid(urls: list[str]) -> str:
-    """Extract webpage text using Monid and TinyFish. Requires MONID_API_KEY."""
-    try:
-        api_key = os.environ.get("MONID_API_KEY")
-        if not api_key:
-            raise ValueError("MONID_API_KEY is not set")
-        headers = {"Authorization": f"Bearer {api_key}"}
-        return "\n\n".join(_extract_page(url, headers) for url in urls)
-    except Exception as e:
-        return f"Error: {e}"
+    """Extract webpage text using Monid and TinyFish. Requires MONID_API_KEY.
+
+    Pages come back in input order. A URL that fails becomes
+    `Error: <url>: <reason>`, so only those URLs need a retry.
+    """
+    api_key = os.environ.get("MONID_API_KEY")
+    if not api_key:
+        return "Error: MONID_API_KEY is not set"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    pages = []
+    for url in urls:
+        try:
+            pages.append(_extract_page(url, headers))
+        except Exception as e:
+            pages.append(f"Error: {url}: {e}")
+    return "\n\n".join(pages)

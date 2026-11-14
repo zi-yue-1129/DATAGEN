@@ -11,6 +11,7 @@ import pytest
 import requests
 
 TOOLS = Path(__file__).resolve().parents[1] / "src" / "tools"
+URL = "https://example.com"
 
 
 def load_module(name, path):
@@ -75,7 +76,7 @@ def test_async_polling(monid):
         response({"status": "RUNNING"}),
         response({"status": "COMPLETED", "output": {"result": {"content": "text"}}}),
     ]
-    assert monid.monid(["https://example.com"]) == "text"
+    assert monid.monid([URL]) == "text"
     assert monid.requests.get.call_count == 2
     assert monid.requests.get.call_args.args == (
         "https://api.monid.ai/v1/runs/run-1",
@@ -91,15 +92,25 @@ def test_provider_errors_use_tool_error_result(monid, status):
         "status": "COMPLETED",
         "providerResponse": {"httpStatus": status, "error": "vendor error"},
     })
-    assert monid.monid(["https://example.com"]) == (
-        f"Error: TinyFish error {status}: vendor error"
-    )
+    assert monid.monid([URL]) == f"Error: {URL}: TinyFish error {status}: vendor error"
 
 
 @pytest.mark.parametrize("status", ["FAILED", "TIMED_OUT", "STOPPED", "BLOCKED"])
 def test_terminal_failure(monid, status):
     monid.requests.post.return_value = response({"status": status})
-    assert monid.monid(["https://example.com"]) == f"Error: Monid run {status}"
+    assert monid.monid([URL]) == f"Error: {URL}: Monid run {status}"
+
+
+def test_mixed_batch_keeps_successes_and_names_the_failed_url(monid):
+    monid.requests.post.side_effect = [
+        response({"output": {"result": {"content": "first"}}}),
+        response({"status": "FAILED"}),
+        response({"output": {"result": {"content": "third"}}}),
+    ]
+    urls = [f"{URL}/1", f"{URL}/2", f"{URL}/3"]
+    assert monid.monid(urls) == f"first\n\nError: {URL}/2: Monid run FAILED\n\nthird"
+    sent = [json.loads(c.kwargs["data"]) for c in monid.requests.post.call_args_list]
+    assert [payload["input"]["body"]["url"] for payload in sent] == urls
 
 
 def test_poll_http_error(monid):
@@ -107,20 +118,20 @@ def test_poll_http_error(monid):
     monid.requests.get.return_value.raise_for_status.side_effect = requests.HTTPError(
         "bad key"
     )
-    assert monid.monid(["https://example.com"]) == "Error: bad key"
+    assert monid.monid([URL]) == f"Error: {URL}: bad key"
 
 
 def test_poll_deadline(monid, monkeypatch):
     monid.requests.post.return_value = response({"runId": "run-1"}, 202)
     monkeypatch.setattr(monid.time, "monotonic", Mock(side_effect=[0, 301]))
-    assert monid.monid(["https://example.com"]) == "Error: Monid run timed out"
+    assert monid.monid([URL]) == f"Error: {URL}: Monid run timed out"
     monid.requests.get.assert_not_called()
 
 
 def test_invalid_provider_result(monid):
     monid.requests.post.return_value = response({"output": {"result": {"status": "failed"}}})
-    assert monid.monid(["https://example.com"]) == (
-        "Error: TinyFish did not return webpage content"
+    assert monid.monid([URL]) == (
+        f"Error: {URL}: TinyFish did not return webpage content"
     )
 
 
@@ -163,7 +174,7 @@ def test_factory_registration_preserves_existing_tools(monkeypatch, enabled):
 
 def test_missing_key_never_calls_http(monid, monkeypatch):
     monkeypatch.delenv("MONID_API_KEY")
-    assert monid.monid(["https://example.com"]) == "Error: MONID_API_KEY is not set"
+    assert monid.monid([URL]) == "Error: MONID_API_KEY is not set"
     monid.requests.post.assert_not_called()
 
 
@@ -171,4 +182,4 @@ def test_submission_http_error(monid):
     monid.requests.post.return_value.raise_for_status.side_effect = requests.HTTPError(
         "no balance"
     )
-    assert monid.monid(["https://example.com"]) == "Error: no balance"
+    assert monid.monid([URL]) == f"Error: {URL}: no balance"
