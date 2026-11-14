@@ -46,13 +46,6 @@ class ToolFactory:
         "arxiv": arxiv,
     }
 
-    if os.getenv("MONID_API_KEY"):
-        from langchain_core.tools import tool
-
-        from .monid import monid
-
-        _registry["monid"] = tool(monid)
-
     @classmethod
     def get_tool(cls, tool_name: str) -> BaseTool | None:
         """Get a tool instance by name.
@@ -156,3 +149,11 @@ class ToolFactory:
         from .mcp_tools import get_mcp_tools_sync
 
         return list(get_mcp_tools_sync(server_names))
+
+
+if os.getenv("MONID_API_KEY"):
+    from langchain_core.tools import tool
+
+    from .monid import monid
+
+    ToolFactory._registry["monid"] = tool(monid)

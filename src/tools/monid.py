@@ -6,6 +6,8 @@ import time
 
 import requests
 
+_TERMINAL = ("COMPLETED", "FAILED", "TIMED_OUT", "STOPPED", "BLOCKED")
+
 
 def _extract_page(url: str, headers: dict) -> str:
     deadline = time.monotonic() + 300
@@ -53,9 +55,7 @@ def _extract_page(url: str, headers: dict) -> str:
             )
             response.raise_for_status()
             run = response.json()
-            if run.get("status") in (
-                "COMPLETED", "FAILED", "TIMED_OUT", "STOPPED", "BLOCKED"
-            ):
+            if run.get("status") in _TERMINAL:
                 break
     provider_response = run.get("providerResponse") or {}
     if provider_response.get("httpStatus", 200) >= 400:

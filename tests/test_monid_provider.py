@@ -78,9 +78,7 @@ def test_async_polling(monid):
     ]
     assert monid.monid([URL]) == "text"
     assert monid.requests.get.call_count == 2
-    assert monid.requests.get.call_args.args == (
-        "https://api.monid.ai/v1/runs/run-1",
-    )
+    assert monid.requests.get.call_args.args == ("https://api.monid.ai/v1/runs/run-1",)
     assert monid.requests.get.call_args.kwargs["headers"] == {
         "Authorization": "Bearer test-key"
     }
@@ -88,10 +86,10 @@ def test_async_polling(monid):
 
 @pytest.mark.parametrize("status", [400, 404, 429])
 def test_provider_errors_use_tool_error_result(monid, status):
-    monid.requests.post.return_value = response({
-        "status": "COMPLETED",
-        "providerResponse": {"httpStatus": status, "error": "vendor error"},
-    })
+    error = {"httpStatus": status, "error": "vendor error"}
+    monid.requests.post.return_value = response(
+        {"status": "COMPLETED", "providerResponse": error}
+    )
     assert monid.monid([URL]) == f"Error: {URL}: TinyFish error {status}: vendor error"
 
 
@@ -129,7 +127,8 @@ def test_poll_deadline(monid, monkeypatch):
 
 
 def test_invalid_provider_result(monid):
-    monid.requests.post.return_value = response({"output": {"result": {"status": "failed"}}})
+    run = {"output": {"result": {"status": "failed"}}}
+    monid.requests.post.return_value = response(run)
     assert monid.monid([URL]) == (
         f"Error: {URL}: TinyFish did not return webpage content"
     )
@@ -143,33 +142,33 @@ def test_factory_registration_preserves_existing_tools(monkeypatch, enabled):
     else:
         monkeypatch.delenv("MONID_API_KEY", raising=False)
     dependencies = {
-        "langchain.tools": ["BaseTool"],
-        "langchain_community.agent_toolkits.load_tools": ["load_tools"],
-        "langchain_community.tools": ["WikipediaQueryRun"],
-        "langchain_community.utilities": ["WikipediaAPIWrapper"],
-        "langchain_core.tools": ["tool"],
-        "_tools_test.logger": ["setup_logger"],
-        "_tools_test.tools.basetool": ["execute_code", "execute_command", "list_directory"],
-        "_tools_test.tools.FileEdit": ["collect_data", "create_document", "edit_document", "read_document"],
-        "_tools_test.tools.internet": ["google_search", "scrape_webpages"],
+        "langchain.tools": "BaseTool",
+        "langchain_community.agent_toolkits.load_tools": "load_tools",
+        "langchain_community.tools": "WikipediaQueryRun",
+        "langchain_community.utilities": "WikipediaAPIWrapper",
+        "langchain_core.tools": "tool",
+        "_tools_test.logger": "setup_logger",
+        "_tools_test.tools.basetool": "execute_code execute_command list_directory",
+        "_tools_test.tools.FileEdit": "collect_data create_document edit_document read_document",
+        "_tools_test.tools.internet": "google_search scrape_webpages",
     }
     for name, attributes in dependencies.items():
         module = ModuleType(name)
-        for attribute in attributes:
-            setattr(module, attribute, type("BaseTool", (), {}) if attribute == "BaseTool" else Mock())
+        for attribute in attributes.split():
+            stub = type("BaseTool", (), {}) if attribute == "BaseTool" else Mock()
+            setattr(module, attribute, stub)
         monkeypatch.setitem(sys.modules, name, module)
     real_monid = load_module("_tools_test.tools.monid", TOOLS / "monid.py")
     monkeypatch.setitem(sys.modules, "_tools_test.tools.monid", real_monid)
     factory = load_module("_tools_test.tools.factory", TOOLS / "factory.py").ToolFactory
     assert ("monid" in factory.list_available_tools()) == enabled
-    assert factory.get_tool("scrape_webpages") is sys.modules[
-        "_tools_test.tools.internet"
-    ].scrape_webpages
-    assert factory.list_available_tools()[:11] == [
-        "execute_code", "execute_command", "list_directory", "create_document",
-        "read_document", "edit_document", "collect_data", "google_search",
-        "scrape_webpages", "wikipedia", "arxiv",
-    ]
+    internet = sys.modules["_tools_test.tools.internet"]
+    assert factory.get_tool("scrape_webpages") is internet.scrape_webpages
+    existing = (
+        "execute_code execute_command list_directory create_document read_document "
+        "edit_document collect_data google_search scrape_webpages wikipedia arxiv"
+    )
+    assert factory.list_available_tools()[:11] == existing.split()
 
 
 def test_missing_key_never_calls_http(monid, monkeypatch):
