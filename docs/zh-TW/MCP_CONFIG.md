@@ -37,7 +37,7 @@ node --version  # 應為 v18+（建議 v20+）
 | 變數 | 必需 | 說明 |
 |------|------|------|
 | `WORKING_DIRECTORY` | ✅ | 資料目錄，供 filesystem MCP 伺服器使用 |
-| `TAVILY_API_KEY` | ❌ | web-search MCP 伺服器的 API 金鑰 |
+| `YDC_API_KEY` | ❌ | web-search 的 You.com API 金鑰（選填，不設定也可使用） |
 | `GITHUB_TOKEN` | ❌ | github MCP 伺服器的個人存取權杖 |
 
 `.env` 範例：
@@ -47,8 +47,8 @@ node --version  # 應為 v18+（建議 v20+）
 WORKING_DIRECTORY = ./data/
 
 # MCP (Model Context Protocol) 設定（可選）
-# Tavily API 金鑰，供 web-search MCP 伺服器使用
-TAVILY_API_KEY = your_tavily_api_key_here
+# You.com API 金鑰，供 web-search 使用（選填，預設使用免金鑰的免費方案）
+# YDC_API_KEY = your_ydc_api_key_here
 # GitHub Token，供 github MCP 伺服器使用
 GITHUB_TOKEN = your_github_token_here
 ```
@@ -70,10 +70,10 @@ servers:
     
   web-search:
     command: npx
-    args: ["-y", "@anthropic/mcp-server-web-search"]
+    args: ["-y", "@youdotcom-oss/mcp"]
     env:
-      TAVILY_API_KEY: ${TAVILY_API_KEY}
-    description: 網頁搜尋功能
+      YDC_PROFILE: free
+    description: 網頁搜尋功能（You.com）
     
   github:
     command: npx
@@ -146,7 +146,9 @@ Agent 實際啟用的服務 = `defaults` ∪ Agent 特定 `mcp_servers`
 
 ### Web Search 伺服器
 
-需要 `TAVILY_API_KEY`。提供網頁搜尋功能。
+使用 You.com MCP 伺服器（`@youdotcom-oss/mcp`）。預設使用免金鑰的免費方案
+（`YDC_PROFILE: free`，每天約 100 次搜尋），不需要 API 金鑰。若要使用自己的金鑰，
+請從 `config/mcp.yaml` 移除 `YDC_PROFILE`，並在 `.env` 設定 `YDC_API_KEY`。
 
 ### GitHub 伺服器
 

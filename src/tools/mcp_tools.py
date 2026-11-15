@@ -154,7 +154,10 @@ class MCPToolAdapter(BaseTool):
         from ..core.mcp_manager import get_mcp_manager
 
         manager = get_mcp_manager()
-        result = await manager.call_tool(self.mcp_server, self.mcp_tool_name, kwargs)
+        # Optional arguments the model left out default to None in the args
+        # schema. Drop them so servers that validate types don't reject null.
+        arguments = {k: v for k, v in kwargs.items() if v is not None}
+        result = await manager.call_tool(self.mcp_server, self.mcp_tool_name, arguments)
         return result
 
 

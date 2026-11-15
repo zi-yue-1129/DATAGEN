@@ -37,7 +37,7 @@ Configure the following in your `.env` file:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `WORKING_DIRECTORY` | ✅ | Data directory for filesystem MCP server |
-| `TAVILY_API_KEY` | ❌ | API key for web-search MCP server |
+| `YDC_API_KEY` | ❌ | Optional You.com API key for web-search (works without one) |
 | `GITHUB_TOKEN` | ❌ | Personal access token for github MCP server |
 
 Example `.env`:
@@ -47,8 +47,8 @@ Example `.env`:
 WORKING_DIRECTORY = ./data/
 
 # MCP (Model Context Protocol) Settings (optional)
-# Tavily API key for web-search MCP server
-TAVILY_API_KEY = your_tavily_api_key_here
+# You.com API key for web-search (optional; the free keyless tier is used by default)
+# YDC_API_KEY = your_ydc_api_key_here
 # GitHub token for github MCP server
 GITHUB_TOKEN = your_github_token_here
 ```
@@ -70,10 +70,10 @@ servers:
     
   web-search:
     command: npx
-    args: ["-y", "@anthropic/mcp-server-web-search"]
+    args: ["-y", "@youdotcom-oss/mcp"]
     env:
-      TAVILY_API_KEY: ${TAVILY_API_KEY}
-    description: Web search capabilities
+      YDC_PROFILE: free
+    description: Web search capabilities (You.com)
     
   github:
     command: npx
@@ -146,7 +146,9 @@ The `filesystem` MCP server provides 14 tools:
 
 ### Web Search Server
 
-Requires `TAVILY_API_KEY`. Provides web search capabilities.
+Uses the You.com MCP server (`@youdotcom-oss/mcp`). It works without an API key
+on the free keyless tier (`YDC_PROFILE: free`, about 100 searches a day). To use
+your own key, remove `YDC_PROFILE` from `config/mcp.yaml` and set `YDC_API_KEY` in `.env`.
 
 ### GitHub Server
 
