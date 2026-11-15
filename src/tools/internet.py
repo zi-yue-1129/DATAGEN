@@ -10,23 +10,43 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 
-from ..config import CHROMEDRIVER_PATH, CRW_API_KEY, CRW_API_URL, FIRECRAWL_API_KEY
+from ..config import (
+    CHROMEDRIVER_PATH,
+    CRW_API_KEY,
+    CRW_API_URL,
+    FIRECRAWL_API_KEY,
+    SEARCH_PROVIDER,
+)
 from ..logger import setup_logger
+from .youcom import youcom_search
 
 # Set up logger
 logger = setup_logger()
 
 
+def _youcom_fallback(query: str, reason: str) -> str:
+    logger.info(f"{reason}. Searching You.com for query: {query}")
+    try:
+        return youcom_search(query, count=5)
+    except Exception as e:
+        logger.error(f"Error during You.com search: {str(e)}")
+        return f"Error: {e}"
+
+
 @tool
 def google_search(
     query: Annotated[str, "The search query to use"],
-) -> Annotated[str, "The top 5 Google search results."]:
+) -> Annotated[str, "The top 5 web search results."]:
     """
-    Perform a Google search based on the given query and return the top 5 results.
+    Perform a web search based on the given query and return the top 5 results.
 
-    This function uses Selenium to perform a headless Google search and BeautifulSoup to parse the results.
+    By default this uses Selenium to perform a headless Google search and BeautifulSoup to parse the results.
+    If that fails or finds nothing, it falls back to You.com search, which needs no API key.
+    Set SEARCH_PROVIDER=youcom to skip Selenium and search You.com directly.
 
     """
+    if SEARCH_PROVIDER == "youcom":
+        return _youcom_fallback(query, "SEARCH_PROVIDER is youcom")
     try:
         logger.info(f"Performing Google search for query: {query}")
         chrome_options = Options()
@@ -55,11 +75,13 @@ def google_search(
             link = link_element["href"] if link_element else "No Link"
             search += f"{title}\n{snippet}\n{link}\n\n"
 
+        if not search:
+            return _youcom_fallback(query, "Google search returned no results")
         logger.info("Google search completed successfully")
         return search
     except Exception as e:
         logger.error(f"Error during Google search: {str(e)}")
-        return f"Error: {e}"
+        return _youcom_fallback(query, "Google search failed")
 
 
 def _scrape_webpages(

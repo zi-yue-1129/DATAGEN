@@ -12,6 +12,8 @@ CONDA_ENV = datagen
 
 # ChromeDriver executable path(required)
 CHROMEDRIVER_PATH =./chromedriver-linux64/chromedriver
+# Web search provider (optional): "google" (Selenium, falls back to You.com) or "youcom" (no ChromeDriver needed)
+SEARCH_PROVIDER = google
 
 # Firecrawl API key (optional)
 # Note: If this key is missing, query capabilities may be reduced
@@ -41,7 +43,8 @@ LANGCHAIN_PROJECT = "Multi-agent-DataAnalysis"
 LANGCHAIN_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 # MCP (Model Context Protocol) Settings (optional)
-# Tavily API key for web-search MCP server
-TAVILY_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+# You.com API key for web search (optional)
+# Without it, web search uses the free keyless tier (about 100 searches a day)
+# YDC_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 # GitHub token for github MCP server
 GITHUB_TOKEN = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX

@@ -96,6 +96,8 @@ CONDA_ENV = datagen
 
 # ChromeDriver executable path (required)
 CHROMEDRIVER_PATH = ./chromedriver-linux64/chromedriver
+# Web search provider (optional): "google" (Selenium, falls back to You.com) or "youcom" (no ChromeDriver needed)
+SEARCH_PROVIDER = google
 
 # Firecrawl API key (optional)
 # Note: If this key is missing, query capabilities may be reduced
@@ -125,11 +127,22 @@ LANGCHAIN_PROJECT = "Multi-agent-DataAnalysis"
 LANGCHAIN_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 # MCP (Model Context Protocol) Settings (optional)
-# Tavily API key for web-search MCP server
-TAVILY_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+# You.com API key for web search (optional)
+# Without it, web search uses the free keyless tier (about 100 searches a day)
+# YDC_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 # GitHub token for github MCP server
 GITHUB_TOKEN = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
+
+### Web search without an API key
+
+The `google_search` tool scrapes Google with Selenium. If that fails or finds
+nothing (for example when ChromeDriver is missing), it falls back to You.com
+search, which works without an API key on the free tier (about 100 searches a
+day). Set `SEARCH_PROVIDER = youcom` in `.env` to skip Selenium and search
+You.com directly. Set `YDC_API_KEY` for higher limits
+(key at https://you.com/platform). The `web-search` MCP server
+in `config/mcp.yaml` uses the same free tier.
 
 ### Optional Monid webpage extraction
 

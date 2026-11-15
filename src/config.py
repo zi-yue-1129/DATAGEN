@@ -20,6 +20,8 @@ WORKING_DIRECTORY = os.getenv("WORKING_DIRECTORY", "./data")
 CONDA_ENV = os.getenv("CONDA_ENV", "base")
 # Get ChromeDriver
 CHROMEDRIVER_PATH = os.getenv("CHROMEDRIVER_PATH", "./chromedriver/chromedriver")
+# Web search: "google" (Selenium, falls back to You.com) or "youcom" (no ChromeDriver needed)
+SEARCH_PROVIDER = os.getenv("SEARCH_PROVIDER", "google").strip().lower()
 # Get Config Directory
 CONFIG_DIRECTORY = os.getenv("CONFIG_DIRECTORY", "config")
 
