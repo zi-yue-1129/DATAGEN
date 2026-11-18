@@ -113,6 +113,8 @@ ANTHROPIC_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 GOOGLE_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 # Atlas Cloud API 金鑰（可選）
 ATLASCLOUD_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+# Runcrate API 金鑰（可選；供 runcrate 提供者使用）
+RUNCRATE_API_KEY = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 # LangChain API 金鑰（可選）
 # 用於監控處理過程
@@ -192,7 +194,7 @@ agents:
       model: claude-sonnet-5
 ```
 
-- **provider**：指定要使用的語言模型提供者（例如 openai、google、anthropic、ollama、groq、atlascloud、orcarouter）
+- **provider**：指定要使用的語言模型提供者（例如 openai、google、anthropic、ollama、groq、atlascloud、orcarouter、runcrate）
 - **model_config**：包含模型特定的配置參數
   - `model`：要使用的特定模型名稱
   - `temperature`：控制模型輸出的隨機性（範圍：0.0-2.0）。不接受此參數的模型請省略：
@@ -206,6 +208,15 @@ agents:
     model_config:
       model: openai/gpt-5.4
       temperature: 1.0
+```
+
+`runcrate` 提供者會讀取 `RUNCRATE_API_KEY`，並使用 Runcrate 的 OpenAI 相容端點存取開放權重模型。請從 [Runcrate 模型目錄](https://runcrate.ai/inference)選擇模型，例如：
+
+```yaml
+  report_agent:
+    provider: runcrate
+    model_config:
+      model: deepseek-ai/DeepSeek-V4.1-Flash
 ```
 
 ## 進階配置系統

@@ -59,7 +59,7 @@ Edit `config/agent_models.yaml` to change an agent's model:
 ```yaml
 agents:
   code_agent:
-    provider: anthropic      # openai, google, anthropic, ollama, orcarouter
+    provider: anthropic      # openai, google, anthropic, ollama, orcarouter, runcrate
     model_config:
       model: claude-sonnet-5
 ```
@@ -73,6 +73,7 @@ Supported providers:
 - `anthropic` - Claude series
 - `ollama` - Local models
 - `orcarouter` - OrcaRouter gateway models (OpenAI-compatible)
+- `runcrate` - Runcrate open-weight models (OpenAI-compatible)
 
 ---
 
