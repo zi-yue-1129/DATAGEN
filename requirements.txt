@@ -11,7 +11,7 @@ beautifulsoup4==4.15.0
 langgraph==1.2.12
 pandas==2.3.3
 python-dotenv==1.2.3
-selenium==4.49.0
+selenium==4.50.0
 wikipedia==1.4.0
 firecrawl-py==4.45.0
 langchain-crw==0.5.0
